@@ -1,0 +1,109 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentbox
+      POSTGRES_PASSWORD: agentbox
+      POSTGRES_DB: agentbox
+    volumes:
+      - agentbox_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentbox -d agentbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Force in-compose connectivity.
+      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./tenants:/app/tenants
+      - ./secrets:/app/secrets
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+
+  worker:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./tenants:/app/tenants
+      - ./secrets:/app/secrets
+    command: celery -A src.workers.celery_app worker -l info
+
+  beat:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./tenants:/app/tenants
+      - ./secrets:/app/secrets
+    command: celery -A src.workers.celery_app beat -l info
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Empty => web uses same-origin API behind Caddy.
+        NEXT_PUBLIC_API_URL: ""
+    restart: unless-stopped
+    depends_on:
+      - app
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  agentbox_pgdata:
+  caddy_data:
+  caddy_config:
+

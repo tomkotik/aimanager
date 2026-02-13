@@ -1,0 +1,94 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agentbox
+      POSTGRES_PASSWORD: agentbox
+      POSTGRES_DB: agentbox
+    volumes:
+      - agentbox_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentbox -d agentbox"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production
+      DEBUG: "true"
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./src:/app/src
+      - ./tenants:/app/tenants
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build: ./web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://app:8000
+    depends_on:
+      - app
+
+  worker:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production
+      DEBUG: "true"
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./src:/app/src
+      - ./tenants:/app/tenants
+    command: celery -A src.workers.celery_app worker -l info
+
+  beat:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production
+      DEBUG: "true"
+      LOG_LEVEL: "INFO"
+    volumes:
+      - ./src:/app/src
+      - ./tenants:/app/tenants
+    command: celery -A src.workers.celery_app beat -l info
+
+volumes:
+  agentbox_pgdata:

@@ -1,0 +1,17 @@
+:80 {
+  encode gzip
+
+  @api path /api/* /docs* /openapi.json /health /api/v1/webhooks/*
+  reverse_proxy @api app:8000
+
+  reverse_proxy web:3000
+}
+
+uiwall79.beget.tech {
+  encode gzip
+
+  @api path /api/* /docs* /openapi.json /health /api/v1/webhooks/*
+  reverse_proxy @api app:8000
+
+  reverse_proxy web:3000
+}

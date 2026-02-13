@@ -1,0 +1,7 @@
+test: "Client wants to book"
+messages:
+  - user: "Хочу записаться на съёмку"
+    expected_intent: "BOOKING"
+  - user: "Забронировать зал на субботу"
+    expected_intent: "BOOKING"
+

@@ -1,0 +1,9 @@
+test: "Client asks about pricing"
+messages:
+  - user: "Сколько стоит съёмка?"
+    expected_intent: "PRICING"
+  - user: "Какая цена за час?"
+    expected_intent: "PRICING"
+  - user: "Прайс"
+    expected_intent: "PRICING"
+

@@ -1,0 +1,22 @@
+actions:
+  - id: "check_availability"
+    type: "google_calendar"
+    trigger: "pre_action"
+    config: {}
+
+  - id: "create_booking"
+    type: "google_calendar"
+    trigger: "post_action"
+    config: {}
+
+  - id: "log_lead"
+    type: "google_sheets"
+    trigger: "post_action"
+    config: {}
+
+  - id: "escalate_to_human"
+    type: "notification"
+    trigger: "on_escalate"
+    config:
+      channel: "telegram"
+

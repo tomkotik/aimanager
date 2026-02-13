@@ -1,0 +1,9 @@
+test: "Client asks about location"
+messages:
+  - user: "Где вы находитесь?"
+    expected_intent: "ADDRESS"
+  - user: "Как добраться до студии?"
+    expected_intent: "ADDRESS"
+  - user: "Адрес"
+    expected_intent: "ADDRESS"
+

@@ -1,0 +1,9 @@
+test: "Client greets the studio"
+messages:
+  - user: "Привет!"
+    expected_intent: "GREETING"
+  - user: "Добрый день"
+    expected_intent: "GREETING"
+  - user: "Здравствуйте, хочу узнать про съёмку"
+    expected_intent: "GREETING"
+

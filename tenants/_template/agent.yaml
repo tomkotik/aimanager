@@ -1,0 +1,28 @@
+agent:
+  id: "change-me"
+  name: "My Agent"
+  
+  identity:
+    role: "Customer support agent"
+    persona: "Friendly assistant"
+    fallback_phrase: "How can I help?"
+  
+  style:
+    tone: "warm_professional"
+    politeness: "вы"
+    emoji_policy: "rare"
+    greeting: "Здравствуйте! Чем могу помочь?"
+    clean_text: true
+    max_sentences: 3
+    max_questions: 1
+  
+  rules: []
+  
+  llm:
+    provider: "openai"
+    model: "gpt-4o"
+    temperature: 0.3
+    max_history: 20
+  
+  channels: []
+

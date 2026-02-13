@@ -1,0 +1,7 @@
+test: "Client needs escalation"
+messages:
+  - user: "Мне нужна скидка побольше"
+    expected_intent: "ESCALATE"
+  - user: "Срочно нужно связаться с менеджером"
+    expected_intent: "ESCALATE"
+
