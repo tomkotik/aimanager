@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/components/ToastProvider";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, formatApiErrorRu } from "@/lib/api";
 import { AgentDetailResponse } from "@/types/api";
 
 type TabId = "main" | "rules" | "intents" | "channels";
@@ -161,10 +161,10 @@ function normalizeDialoguePolicy(raw: Record<string, unknown>): Required<Pick<Di
 }
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "main", label: "Основное" },
-  { id: "rules", label: "Правила" },
-  { id: "intents", label: "Интенты" },
-  { id: "channels", label: "Каналы" },
+  { id: "main", label: "Основные настройки" },
+  { id: "rules", label: "Бизнес-правила" },
+  { id: "intents", label: "Намерения клиентов" },
+  { id: "channels", label: "Подключённые каналы" },
 ];
 
 export default function AgentDetailPage() {
@@ -194,7 +194,7 @@ export default function AgentDetailPage() {
         toast.push({
           variant: "error",
           title: "Ошибка загрузки агента",
-          message: e instanceof Error ? e.message : "Неизвестная ошибка",
+          message: formatApiErrorRu(e),
         });
       } finally {
         setLoading(false);
@@ -224,7 +224,7 @@ export default function AgentDetailPage() {
       toast.push({
         variant: "error",
         title: "Ошибка сохранения",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setSaving(false);
@@ -253,7 +253,7 @@ export default function AgentDetailPage() {
           </button>
           <h1 className="mt-1 truncate font-mono text-xl">{agent.name}</h1>
           <div className="mt-1 text-sm text-text-dim">
-            слаг: <span className="font-mono text-text-muted">{agent.slug}</span>
+            Идентификатор: <span className="font-mono text-text-muted">{agent.slug}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -285,7 +285,7 @@ export default function AgentDetailPage() {
         <Card className="space-y-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <div className="text-xs text-text-dim">Тон</div>
+              <div className="text-xs text-text-dim">Тон общения</div>
               <input
                 value={normalized.style.tone}
                 onChange={(e) =>
@@ -295,6 +295,7 @@ export default function AgentDetailPage() {
                   }))
                 }
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                placeholder="дружелюбный / формальный"
               />
             </div>
             <div className="space-y-2">
@@ -308,10 +309,11 @@ export default function AgentDetailPage() {
                   }))
                 }
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                placeholder="вы"
               />
             </div>
             <div className="space-y-2">
-              <div className="text-xs text-text-dim">Эмодзи</div>
+              <div className="text-xs text-text-dim">Использование эмодзи</div>
               <input
                 value={normalized.style.emoji_policy}
                 onChange={(e) =>
@@ -321,6 +323,7 @@ export default function AgentDetailPage() {
                   }))
                 }
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                placeholder="никогда"
               />
             </div>
             <div className="space-y-2">
@@ -334,10 +337,11 @@ export default function AgentDetailPage() {
                   }))
                 }
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                placeholder="Здравствуйте! Чем могу помочь?"
               />
             </div>
             <div className="space-y-2">
-              <div className="text-xs text-text-dim">max_sentences</div>
+              <div className="text-xs text-text-dim">Макс. предложений в ответе</div>
               <input
                 type="number"
                 value={normalized.style.max_sentences}
@@ -354,7 +358,7 @@ export default function AgentDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <div className="text-xs text-text-dim">max_questions</div>
+              <div className="text-xs text-text-dim">Макс. вопросов в ответе</div>
               <input
                 type="number"
                 value={normalized.style.max_questions}
@@ -370,13 +374,27 @@ export default function AgentDetailPage() {
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
               />
             </div>
+            <label className="flex items-center gap-3 md:col-span-2">
+              <input
+                type="checkbox"
+                checked={Boolean(normalized.style.clean_text)}
+                onChange={(e) =>
+                  setConfig((p) => ({
+                    ...p,
+                    style: { ...asObject(p.style), clean_text: e.target.checked },
+                  }))
+                }
+                className="h-4 w-4 accent-accent"
+              />
+              <span className="text-xs text-text-dim">Очищать форматирование</span>
+            </label>
           </div>
 
           <div className="border-t border-border pt-6">
-            <div className="mb-3 font-mono text-sm">LLM</div>
+            <div className="mb-3 font-mono text-sm">Настройки ИИ</div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <div className="text-xs text-text-dim">Провайдер</div>
+                <div className="text-xs text-text-dim">Провайдер ИИ</div>
                 <select
                   value={asString(asObject(normalized.llm).provider, "openai")}
                   onChange={(e) =>
@@ -408,7 +426,7 @@ export default function AgentDetailPage() {
               </div>
               <div className="space-y-2 md:col-span-3">
                 <div className="flex items-center justify-between text-xs text-text-dim">
-                  <span>Температура</span>
+                  <span>Температура (креативность)</span>
                   <span className="font-mono text-text-muted">
                     {asNumber(asObject(normalized.llm).temperature, 0.3).toFixed(2)}
                   </span>
@@ -428,6 +446,21 @@ export default function AgentDetailPage() {
                   className="w-full"
                 />
               </div>
+              <div className="space-y-2 md:col-span-3">
+                <div className="text-xs text-text-dim">Глубина памяти (сообщений)</div>
+                <input
+                  type="number"
+                  value={asNumber(asObject(normalized.llm).max_history, 20)}
+                  onChange={(e) =>
+                    setConfig((p) => ({
+                      ...p,
+                      llm: { ...asObject(p.llm), max_history: Number(e.target.value || 0) },
+                    }))
+                  }
+                  className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                  placeholder="20"
+                />
+              </div>
             </div>
           </div>
         </Card>
@@ -436,7 +469,7 @@ export default function AgentDetailPage() {
       {tab === "rules" ? (
         <Card className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="font-mono text-sm">Правила</div>
+            <div className="font-mono text-sm">Бизнес-правила</div>
             <Button
               variant="primary"
               onClick={() =>
@@ -444,18 +477,22 @@ export default function AgentDetailPage() {
                   ...p,
                   rules: [
                     ...(Array.isArray(p.rules) ? (p.rules as AgentRule[]) : []),
-                    { id: "new_rule", priority: "normal", description: "" },
+                    {
+                      id: `правило_${(Array.isArray(p.rules) ? (p.rules as AgentRule[]).length : 0) + 1}`,
+                      priority: "normal",
+                      description: "",
+                    },
                   ],
                 }))
               }
             >
-              + Добавить
+              + Добавить правило
             </Button>
           </div>
 
           <div className="space-y-3">
             {normalized.rules.length === 0 ? (
-              <div className="text-sm text-text-dim">Нет правил.</div>
+              <div className="text-sm text-text-dim">Правила не добавлены.</div>
             ) : null}
 
             {normalized.rules.map((r, idx) => (
@@ -463,7 +500,7 @@ export default function AgentDetailPage() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="flex flex-1 flex-col gap-3 md:flex-row">
                     <div className="flex-1 space-y-1">
-                      <div className="text-xs text-text-dim">id</div>
+                      <div className="text-xs text-text-dim">Номер правила</div>
                       <input
                         value={r.id}
                         onChange={(e) =>
@@ -475,11 +512,12 @@ export default function AgentDetailPage() {
                           }))
                         }
                         className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                        placeholder="правило_1"
                       />
                     </div>
                     <div className="w-full md:w-48 space-y-1">
-                      <div className="text-xs text-text-dim">priority</div>
-                      <input
+                      <div className="text-xs text-text-dim">Приоритет</div>
+                      <select
                         value={r.priority}
                         onChange={(e) =>
                           setConfig((p) => ({
@@ -490,7 +528,15 @@ export default function AgentDetailPage() {
                           }))
                         }
                         className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
-                      />
+                      >
+                        {!["critical", "high", "normal", "low"].includes(r.priority) ? (
+                          <option value={r.priority}>{r.priority}</option>
+                        ) : null}
+                        <option value="critical">Критический</option>
+                        <option value="high">Высокий</option>
+                        <option value="normal">Обычный</option>
+                        <option value="low">Низкий</option>
+                      </select>
                     </div>
                   </div>
                   <Button
@@ -507,7 +553,7 @@ export default function AgentDetailPage() {
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <div className="text-xs text-text-dim">description</div>
+                  <div className="text-xs text-text-dim">Описание</div>
                   <textarea
                     value={r.description}
                     onChange={(e) =>
@@ -525,7 +571,7 @@ export default function AgentDetailPage() {
 
                 <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <div className="text-xs text-text-dim">positive_example</div>
+                    <div className="text-xs text-text-dim">Пример правильного ответа</div>
                     <textarea
                       value={r.positive_example || ""}
                       onChange={(e) =>
@@ -541,7 +587,7 @@ export default function AgentDetailPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="text-xs text-text-dim">negative_example</div>
+                    <div className="text-xs text-text-dim">Пример неправильного ответа</div>
                     <textarea
                       value={r.negative_example || ""}
                       onChange={(e) =>
@@ -566,7 +612,7 @@ export default function AgentDetailPage() {
       {tab === "intents" ? (
         <Card className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="font-mono text-sm">Интенты</div>
+            <div className="font-mono text-sm">Намерения клиентов</div>
             <Button
               variant="primary"
               onClick={() =>
@@ -574,18 +620,23 @@ export default function AgentDetailPage() {
                   ...p,
                   intents: [
                     ...(Array.isArray(p.intents) ? (p.intents as IntentConfig[]) : []),
-                    { id: "NEW_INTENT", markers: [], priority: 50, contract: { must_include_any: [], forbidden: [] } },
+                    {
+                      id: `намерение_${(Array.isArray(p.intents) ? (p.intents as IntentConfig[]).length : 0) + 1}`,
+                      markers: [],
+                      priority: 50,
+                      contract: { must_include_any: [], forbidden: [] },
+                    },
                   ],
                 }))
               }
             >
-              + Добавить
+              + Добавить намерение
             </Button>
           </div>
 
           <div className="space-y-3">
             {dp.intents.length === 0 ? (
-              <div className="text-sm text-text-dim">Нет интентов.</div>
+              <div className="text-sm text-text-dim">Намерения не добавлены.</div>
             ) : null}
 
             {dp.intents.map((intent, idx) => (
@@ -593,7 +644,7 @@ export default function AgentDetailPage() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="flex flex-1 flex-col gap-3 md:flex-row">
                     <div className="flex-1 space-y-1">
-                      <div className="text-xs text-text-dim">id</div>
+                      <div className="text-xs text-text-dim">Код намерения</div>
                       <input
                         value={intent.id}
                         onChange={(e) =>
@@ -603,10 +654,11 @@ export default function AgentDetailPage() {
                           }))
                         }
                         className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                        placeholder="намерение_1"
                       />
                     </div>
                     <div className="w-full md:w-40 space-y-1">
-                      <div className="text-xs text-text-dim">priority</div>
+                      <div className="text-xs text-text-dim">Приоритет</div>
                       <input
                         type="number"
                         value={intent.priority ?? 50}
@@ -637,7 +689,10 @@ export default function AgentDetailPage() {
 
                 <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div className="space-y-2">
-                    <div className="text-xs text-text-dim">markers (через запятую)</div>
+                    <div className="text-xs text-text-dim">Ключевые слова</div>
+                    <div className="text-[11px] text-text-dim">
+                      Ключевые слова через запятую, по которым определяется намерение клиента
+                    </div>
                     <input
                       value={intent.markers.join(", ")}
                       onChange={(e) =>
@@ -651,10 +706,12 @@ export default function AgentDetailPage() {
                         }))
                       }
                       className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                      placeholder="цена, стоимость, прайс"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <div className="text-xs text-text-dim">contract.must_include_any (через запятую)</div>
+                  <div className="md:col-span-2 pt-2 text-xs text-text-dim font-mono">Контракт ответа</div>
+                  <div className="space-y-2 md:col-span-2">
+                    <div className="text-xs text-text-dim">Обязательные слова (хотя бы одно)</div>
                     <input
                       value={(intent.contract?.must_include_any || []).join(", ")}
                       onChange={(e) =>
@@ -668,10 +725,11 @@ export default function AgentDetailPage() {
                         }))
                       }
                       className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                      placeholder="руб, ₽"
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <div className="text-xs text-text-dim">contract.forbidden (через запятую)</div>
+                    <div className="text-xs text-text-dim">Запрещённые слова</div>
                     <input
                       value={(intent.contract?.forbidden || []).join(", ")}
                       onChange={(e) =>
@@ -688,6 +746,7 @@ export default function AgentDetailPage() {
                         }))
                       }
                       className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                      placeholder="не знаю"
                     />
                   </div>
                 </div>
@@ -716,15 +775,22 @@ function ChannelsTab({
 }) {
   const toast = useToast();
   const [newType, setNewType] = useState("umnico");
-  const [newConfig, setNewConfig] = useState("{}");
+  const [newToken, setNewToken] = useState("");
+  const [newWebhookUrl, setNewWebhookUrl] = useState("");
+
+  function channelTypeLabel(type: string): string {
+    if (type === "umnico") return "Umnico (мессенджеры)";
+    if (type === "telegram") return "Telegram-бот";
+    return type;
+  }
 
   return (
     <Card className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="font-mono text-sm">Каналы</div>
+          <div className="font-mono text-sm">Подключённые каналы</div>
           <div className="mt-1 text-xs text-text-dim">
-            Подключённые каналы хранятся в agent.config.channels
+            Здесь настраиваются каналы, через которые агент получает и отправляет сообщения.
           </div>
         </div>
       </div>
@@ -736,29 +802,52 @@ function ChannelsTab({
 
         {channels.map((ch, idx) => (
           <div key={`${ch.type}-${idx}`} className="rounded-xl border border-border p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="font-mono text-sm">{ch.type}</div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <div className="text-xs text-text-dim">Тип канала</div>
+                <div className="mt-1 truncate font-mono text-sm">{channelTypeLabel(ch.type)}</div>
+              </div>
               <Button variant="danger" onClick={() => onChange(channels.filter((_c, i) => i !== idx))}>
                 Удалить
               </Button>
             </div>
 
-            <div className="mt-3 space-y-2">
-              <div className="text-xs text-text-dim">config (JSON)</div>
-              <textarea
-                value={JSON.stringify(ch.config, null, 2)}
-                onChange={(e) => {
-                  const parsed = parseJsonObject(e.target.value);
-                  if (!parsed.ok) {
-                    toast.push({ variant: "error", title: "Некорректный JSON", message: parsed.error });
-                    return;
-                  }
-                  const next = channels.map((x, i) => (i === idx ? { ...x, config: parsed.value } : x));
-                  onChange(next);
-                }}
-                rows={6}
-                className="w-full resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm font-mono outline-none focus:border-border-light"
-              />
+            <div className="mt-4 text-xs text-text-dim font-mono">Настройки</div>
+            <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-xs text-text-dim">Токен</div>
+                <input
+                  type="password"
+                  value={asString(asObject(ch.config).token, "")}
+                  onChange={(e) => {
+                    const next = channels.map((x, i) => {
+                      if (i !== idx) return x;
+                      return { ...x, config: { ...asObject(x.config), token: e.target.value } };
+                    });
+                    onChange(next);
+                  }}
+                  className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                  placeholder="(необязательно)"
+                />
+                <div className="text-[11px] text-text-dim">
+                  Токены лучше хранить в разделе «Секреты».
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs text-text-dim">URL для входящих сообщений</div>
+                <input
+                  value={asString(asObject(ch.config).webhook_url, "")}
+                  onChange={(e) => {
+                    const next = channels.map((x, i) => {
+                      if (i !== idx) return x;
+                      return { ...x, config: { ...asObject(x.config), webhook_url: e.target.value } };
+                    });
+                    onChange(next);
+                  }}
+                  className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+                  placeholder="https://ваш-домен/api/v1/webhooks/..."
+                />
+              </div>
             </div>
           </div>
         ))}
@@ -768,23 +857,33 @@ function ChannelsTab({
         <div className="font-mono text-sm">Добавить канал</div>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-2">
-            <div className="text-xs text-text-dim">type</div>
+            <div className="text-xs text-text-dim">Тип канала</div>
             <select
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
             >
-              <option value="umnico">umnico</option>
-              <option value="telegram">telegram</option>
+              <option value="umnico">Umnico (мессенджеры)</option>
+              <option value="telegram">Telegram-бот</option>
             </select>
           </div>
+          <div className="space-y-2">
+            <div className="text-xs text-text-dim">Токен</div>
+            <input
+              type="password"
+              value={newToken}
+              onChange={(e) => setNewToken(e.target.value)}
+              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+              placeholder="(необязательно)"
+            />
+          </div>
           <div className="space-y-2 md:col-span-2">
-            <div className="text-xs text-text-dim">config (JSON)</div>
-            <textarea
-              value={newConfig}
-              onChange={(e) => setNewConfig(e.target.value)}
-              rows={6}
-              className="w-full resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm font-mono outline-none focus:border-border-light"
+            <div className="text-xs text-text-dim">URL для входящих сообщений</div>
+            <input
+              value={newWebhookUrl}
+              onChange={(e) => setNewWebhookUrl(e.target.value)}
+              className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
+              placeholder="https://ваш-домен/api/v1/webhooks/..."
             />
           </div>
         </div>
@@ -792,17 +891,19 @@ function ChannelsTab({
           <Button
             variant="primary"
             onClick={() => {
-              const parsed = parseJsonObject(newConfig);
-              if (!parsed.ok) {
-                toast.push({ variant: "error", title: "Некорректный JSON", message: parsed.error });
-                return;
-              }
-              onChange([...channels, { type: newType, config: parsed.value }]);
-              setNewConfig("{}");
-              toast.push({ variant: "success", title: "Канал добавлен", message: newType });
+              const token = newToken.trim();
+              const webhook_url = newWebhookUrl.trim();
+              const cfg: Record<string, unknown> = {};
+              if (token) cfg.token = token;
+              if (webhook_url) cfg.webhook_url = webhook_url;
+
+              onChange([...channels, { type: newType, config: cfg }]);
+              setNewToken("");
+              setNewWebhookUrl("");
+              toast.push({ variant: "success", title: "Канал добавлен", message: channelTypeLabel(newType) });
             }}
           >
-            Добавить
+            Добавить канал
           </Button>
         </div>
       </div>

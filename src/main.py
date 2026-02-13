@@ -34,16 +34,28 @@ async def lifespan(app: FastAPI):
         logger.info("Application shutdown completed")
 
 
-app = FastAPI(title="AgentBox", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="AgentBox",
+    description="Платформа управления AI-агентами",
+    version="0.1.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+    lifespan=lifespan,
+)
 
-if settings.debug:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+origins = (
+    [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
+    if settings.allowed_origins != "*"
+    else ["*"]
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router)
 app.include_router(agents_router)

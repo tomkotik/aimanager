@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/components/ToastProvider";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, formatApiErrorRu } from "@/lib/api";
 import {
   AgentResponse,
   ConversationDetailResponse,
@@ -22,6 +22,13 @@ function channelIcon(channel: string): string {
   if (channel === "telegram") return "🟦";
   if (channel === "test_chat") return "🧪";
   return "💬";
+}
+
+function channelLabel(channel: string): string {
+  if (channel === "test_chat") return "Тестовый чат";
+  if (channel === "umnico") return "Umnico";
+  if (channel === "telegram") return "Telegram";
+  return channel;
 }
 
 function roleBubbleClasses(role: string): { wrap: string; bubble: string } {
@@ -85,7 +92,7 @@ export default function ConversationsPage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки агентов",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     }
   }
@@ -111,7 +118,7 @@ export default function ConversationsPage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки диалогов",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setLoadingList(false);
@@ -144,7 +151,7 @@ export default function ConversationsPage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки диалога",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setLoadingDetail(false);
@@ -218,13 +225,15 @@ export default function ConversationsPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="font-mono text-xl">Диалоги</h1>
-          <div className="mt-1 text-sm text-text-dim">Просмотр переписок агента (polling 5s)</div>
+          <div className="mt-1 text-sm text-text-dim">
+            Просмотр переписок агента (обновление каждые 5 секунд)
+          </div>
         </div>
       </div>
 
       <Card className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <div className="text-xs text-text-dim">Агент</div>
+          <div className="text-xs text-text-dim">Выберите агента</div>
           <select
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
@@ -245,10 +254,10 @@ export default function ConversationsPage() {
             onChange={(e) => setChannelFilter(e.target.value)}
             className="w-full md:w-48 rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
           >
-            <option value="all">Все</option>
+            <option value="all">Все каналы</option>
             {availableChannels.map((ch) => (
               <option key={ch} value={ch}>
-                {ch}
+                {channelLabel(ch)}
               </option>
             ))}
           </select>
@@ -261,7 +270,7 @@ export default function ConversationsPage() {
           >
             <option value="all">Все</option>
             <option value="active">Активные</option>
-            <option value="stopped">Остановленные</option>
+            <option value="stopped">Завершённые</option>
           </select>
 
           <Button variant="secondary" onClick={() => void loadConversations(true)} disabled={loadingList}>
@@ -319,7 +328,7 @@ export default function ConversationsPage() {
                       </div>
                     </div>
                     <div className="mt-1 truncate text-xs text-text-muted">
-                      {last ? last.snippet : `Сообщений: ${c.message_count}`}
+                      {last ? last.snippet : `сообщ.: ${c.message_count}`}
                     </div>
                   </button>
                 );
@@ -355,12 +364,12 @@ export default function ConversationsPage() {
                       {detail.conversation.lead_name || "Без имени"}
                     </div>
                     <div className="mt-1 text-xs text-text-dim">
-                      {detail.conversation.channel_type} ·{" "}
+                      {channelLabel(detail.conversation.channel_type)} ·{" "}
                       {detail.conversation.lead_phone || "телефон не указан"}
                     </div>
                   </div>
                   <div className="text-xs text-text-dim">
-                    {detail.conversation.is_active ? "активен" : "остановлен"}
+                    {detail.conversation.is_active ? "Активный" : "Завершённый"}
                   </div>
                 </div>
 
@@ -394,9 +403,9 @@ export default function ConversationsPage() {
 
               <div className="lg:col-span-4">
                 <div className="rounded-xl border border-border bg-bg p-3">
-                  <div className="font-mono text-sm">Метаданные</div>
+                  <div className="font-mono text-sm">Детали сообщения</div>
                   {!selectedMessage ? (
-                    <div className="mt-2 text-xs text-text-dim">Кликните на сообщение.</div>
+                    <div className="mt-2 text-xs text-text-dim">Нажмите на сообщение.</div>
                   ) : (
                     <MessageMeta message={selectedMessage} />
                   )}
@@ -426,26 +435,22 @@ function MessageMeta({ message }: { message: MessageResponse }) {
   return (
     <div className="mt-3 space-y-3 text-xs text-text-muted">
       <div>
-        <div className="text-text-dim">role</div>
-        <div className="font-mono text-text">{message.role}</div>
+        <div className="text-text-dim">Роль</div>
+        <div className="font-mono text-text">
+          {message.role === "user" ? "Клиент" : message.role === "assistant" ? "Агент" : message.role}
+        </div>
       </div>
       <div>
-        <div className="text-text-dim">intent</div>
+        <div className="text-text-dim">Намерение</div>
         <div className="font-mono text-text">{intent || "-"}</div>
       </div>
       <div>
-        <div className="text-text-dim">model</div>
+        <div className="text-text-dim">Модель</div>
         <div className="font-mono text-text">{model || "-"}</div>
       </div>
       <div>
-        <div className="text-text-dim">tokens</div>
+        <div className="text-text-dim">Токены</div>
         <div className="font-mono text-text">{tokens !== null ? String(tokens) : "-"}</div>
-      </div>
-      <div>
-        <div className="text-text-dim">raw metadata</div>
-        <pre className="mt-1 max-h-[260px] overflow-auto rounded-lg border border-border bg-bg px-2 py-2 font-mono text-[11px] text-text">
-          {JSON.stringify(message.metadata || {}, null, 2)}
-        </pre>
       </div>
     </div>
   );

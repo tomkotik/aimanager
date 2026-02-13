@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://agentbox:agentbox@localhost:5432/agentbox"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "change-me-in-production"
+    allowed_origins: str = "*"  # В проде: "https://yourdomain.com"
     debug: bool = True
     log_level: str = "INFO"
 
@@ -18,4 +19,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

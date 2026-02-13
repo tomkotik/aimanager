@@ -7,7 +7,7 @@ import { Card } from "@/components/Card";
 import { MarkdownPreview } from "@/components/MarkdownPreview";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/ToastProvider";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, formatApiErrorRu } from "@/lib/api";
 import { AgentResponse, KnowledgeFileInfo, KnowledgeFileResponse } from "@/types/api";
 
 type CreateFileForm = {
@@ -16,10 +16,10 @@ type CreateFileForm = {
 };
 
 function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) return `${bytes} Б`;
   const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
+  if (kb < 1024) return `${kb.toFixed(1)} КБ`;
+  return `${(kb / 1024).toFixed(1)} МБ`;
 }
 
 export default function KnowledgePage() {
@@ -56,7 +56,7 @@ export default function KnowledgePage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки агентов",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setLoadingAgents(false);
@@ -75,7 +75,7 @@ export default function KnowledgePage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки файлов",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setLoadingFiles(false);
@@ -95,7 +95,7 @@ export default function KnowledgePage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки файла",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setLoadingFile(false);
@@ -119,7 +119,7 @@ export default function KnowledgePage() {
       toast.push({
         variant: "error",
         title: "Ошибка сохранения",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setSaving(false);
@@ -128,7 +128,7 @@ export default function KnowledgePage() {
 
   async function deleteFile() {
     if (!agentId || !selectedFile) return;
-    const ok = window.confirm(`Удалить файл ${selectedFile}?`);
+    const ok = window.confirm("Удалить файл? Это действие нельзя отменить.");
     if (!ok) return;
 
     try {
@@ -145,7 +145,7 @@ export default function KnowledgePage() {
       toast.push({
         variant: "error",
         title: "Ошибка удаления",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setSaving(false);
@@ -156,7 +156,7 @@ export default function KnowledgePage() {
     if (!agentId) return;
     const name = createForm.name.trim();
     if (!name) {
-      toast.push({ variant: "info", title: "Укажите имя файла (например pricing.md)" });
+      toast.push({ variant: "info", title: "Укажите имя файла (например цены.md)" });
       return;
     }
     try {
@@ -174,7 +174,7 @@ export default function KnowledgePage() {
       toast.push({
         variant: "error",
         title: "Ошибка создания файла",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setSaving(false);
@@ -198,7 +198,7 @@ export default function KnowledgePage() {
         <div>
           <h1 className="font-mono text-xl">База знаний</h1>
           <div className="mt-1 text-sm text-text-dim">
-            Редактирование markdown-файлов KB для выбранного агента
+            Редактирование файлов базы знаний для выбранного агента
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export default function KnowledgePage() {
 
       <Card className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="text-sm text-text-muted">
-          Агент:{" "}
+          Выберите агента:{" "}
           <span className="font-mono text-text">
             {selectedAgent ? selectedAgent.name : "не выбран"}
           </span>
@@ -246,7 +246,7 @@ export default function KnowledgePage() {
                 ))}
               </div>
             ) : files.length === 0 ? (
-              <div className="mt-3 text-sm text-text-dim">Нет файлов в knowledge/.</div>
+              <div className="mt-3 text-sm text-text-dim">Нет файлов.</div>
             ) : (
               files.map((f) => (
                 <button
@@ -287,7 +287,7 @@ export default function KnowledgePage() {
                 onClick={() => setPreview((p) => !p)}
                 disabled={!selectedFile}
               >
-                {preview ? "Скрыть превью" : "Показать превью"}
+                {preview ? "Скрыть предпросмотр" : "Показать предпросмотр"}
               </Button>
               <Button variant="secondary" onClick={() => void saveFile()} disabled={!selectedFile || saving}>
                 Сохранить
@@ -317,7 +317,7 @@ export default function KnowledgePage() {
                 </div>
               ) : (
                 <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text-dim">
-                  Превью выключено.
+                  Предпросмотр выключен.
                 </div>
               )}
             </div>
@@ -325,7 +325,7 @@ export default function KnowledgePage() {
         </Card>
       </div>
 
-      <Modal title="Новый файл KB" open={createOpen} onClose={() => setCreateOpen(false)}>
+      <Modal title="Новый файл" open={createOpen} onClose={() => setCreateOpen(false)}>
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="text-xs text-text-dim">Имя файла</div>
@@ -333,11 +333,11 @@ export default function KnowledgePage() {
               value={createForm.name}
               onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-border-light"
-              placeholder="pricing.md"
+              placeholder="цены.md"
             />
           </div>
           <div className="space-y-2">
-            <div className="text-xs text-text-dim">Контент</div>
+            <div className="text-xs text-text-dim">Содержимое</div>
             <textarea
               value={createForm.content}
               onChange={(e) => setCreateForm((p) => ({ ...p, content: e.target.value }))}

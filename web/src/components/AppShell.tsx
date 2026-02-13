@@ -20,13 +20,14 @@ export function AppShell({ children }: PropsWithChildren) {
                 <button
                   type="button"
                   className="md:hidden inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text-muted hover:bg-bg-hover transition-colors"
+                  aria-label="Открыть меню"
                   onClick={() => setMobileOpen(true)}
                 >
-                  <span className="font-mono">МЕНЮ</span>
+                  <span className="font-mono">☰ Меню</span>
                 </button>
 
                 <div className="hidden md:block text-sm text-text-dim">
-                  Панель управления агентами
+                  Панель управления
                 </div>
               </div>
             </header>

@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "AgentBox",
-  description: "Панель управления агентами AgentBox",
+  description: "Панель управления AgentBox",
 };
 
 export default function RootLayout({

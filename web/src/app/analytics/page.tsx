@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/components/ToastProvider";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, formatApiErrorRu } from "@/lib/api";
 import { AgentResponse, AnalyticsOverviewResponse } from "@/types/api";
 
 type Period = 7 | 30 | 0;
@@ -26,6 +26,13 @@ const CHANNEL_COLORS = ["#10B981", "#F59E0B", "#3F3F46", "#EF4444", "#60A5FA"];
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat("ru-RU").format(n);
+}
+
+function channelLabel(channel: string): string {
+  if (channel === "test_chat") return "Тестовый чат";
+  if (channel === "umnico") return "Umnico";
+  if (channel === "telegram") return "Telegram";
+  return channel;
 }
 
 export default function AnalyticsPage() {
@@ -47,7 +54,7 @@ export default function AnalyticsPage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки агентов",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     }
   }
@@ -64,7 +71,7 @@ export default function AnalyticsPage() {
       toast.push({
         variant: "error",
         title: "Ошибка загрузки аналитики",
-        message: e instanceof Error ? e.message : "Неизвестная ошибка",
+        message: formatApiErrorRu(e),
       });
     } finally {
       setLoading(false);
@@ -110,7 +117,7 @@ export default function AnalyticsPage() {
 
       <Card className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <div className="text-xs text-text-dim">Агент</div>
+          <div className="text-xs text-text-dim">Выберите агента</div>
           <select
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
@@ -133,7 +140,7 @@ export default function AnalyticsPage() {
           >
             <option value="7">7 дней</option>
             <option value="30">30 дней</option>
-            <option value="0">всё время</option>
+            <option value="0">Всё время</option>
           </select>
           <Button variant="secondary" onClick={() => void loadOverview()} disabled={loading}>
             Обновить
@@ -145,11 +152,11 @@ export default function AnalyticsPage() {
         <KpiCard title="💬 Всего диалогов" value={formatNumber(kpi.totalConversations)} loading={loading} />
         <KpiCard title="📩 Всего сообщений" value={formatNumber(kpi.totalMessages)} loading={loading} />
         <KpiCard
-          title="📈 Ср. сообщений/диалог"
+          title="📈 Среднее сообщ./диалог"
           value={kpi.avg.toFixed(2)}
           loading={loading}
         />
-        <KpiCard title="🕐 Диалогов сегодня" value={formatNumber(kpi.todayConversations)} loading={loading} />
+        <KpiCard title="🕐 Диалогов за сегодня" value={formatNumber(kpi.todayConversations)} loading={loading} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
@@ -173,8 +180,8 @@ export default function AnalyticsPage() {
                       color: "#FAFAFA",
                     }}
                   />
-                  <Bar dataKey="user" fill="#3F3F46" name="user" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="assistant" fill="#10B981" name="assistant" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="user" fill="#3F3F46" name="Клиент" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="assistant" fill="#10B981" name="Агент" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -182,7 +189,7 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card className="lg:col-span-5">
-          <div className="font-mono text-sm">Топ интентов</div>
+          <div className="font-mono text-sm">Популярные намерения</div>
           <div className="mt-3 h-[320px]">
             {loading || !data ? (
               <div className="h-full rounded-lg bg-border/40 animate-pulse" />
@@ -233,9 +240,9 @@ export default function AnalyticsPage() {
                     }}
                   />
                   <Pie
-                    data={data.conversations_by_channel}
+                    data={data.conversations_by_channel.map((c) => ({ ...c, label: channelLabel(c.channel) }))}
                     dataKey="count"
-                    nameKey="channel"
+                    nameKey="label"
                     innerRadius={60}
                     outerRadius={90}
                     paddingAngle={2}
@@ -260,7 +267,7 @@ export default function AnalyticsPage() {
                       className="inline-block h-2.5 w-2.5 rounded-full"
                       style={{ background: CHANNEL_COLORS[idx % CHANNEL_COLORS.length] }}
                     />
-                    <div className="font-mono text-sm">{c.channel}</div>
+                    <div className="font-mono text-sm">{channelLabel(c.channel)}</div>
                   </div>
                   <div className="text-sm text-text-muted">{formatNumber(c.count)}</div>
                 </div>

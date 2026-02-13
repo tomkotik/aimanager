@@ -99,11 +99,11 @@ export default function AgentsPage() {
         method: "POST",
       });
       setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-      toast.push({ variant: "success", title: "Синхронизировано", message: agent.slug });
+      toast.push({ variant: "success", title: "Конфиг обновлён", message: agent.slug });
     } catch (e) {
       toast.push({
         variant: "error",
-        title: "Ошибка синхронизации",
+        title: "Ошибка обновления конфига",
         message: formatApiErrorRu(e),
       });
     } finally {
@@ -119,7 +119,7 @@ export default function AgentsPage() {
     };
 
     if (!payload.tenant_slug || !payload.agent_slug) {
-      toast.push({ variant: "info", title: "Заполните тенант и слаг" });
+      toast.push({ variant: "info", title: "Заполните идентификатор клиента и идентификатор агента" });
       return;
     }
 
@@ -196,10 +196,10 @@ export default function AgentsPage() {
                     <div className="truncate font-mono text-sm">{a.name}</div>
                   </div>
                   <div className="mt-1 text-xs text-text-dim">
-                    слаг: <span className="font-mono text-text-muted">{a.slug}</span>
+                    Идентификатор: <span className="font-mono text-text-muted">{a.slug}</span>
                   </div>
                   <div className="mt-1 text-xs text-text-dim">
-                    тенант: <span className="font-mono text-text-muted">{shortId(a.tenant_id)}</span>
+                    Клиент: <span className="font-mono text-text-muted">{shortId(a.tenant_id)}</span>
                   </div>
                 </div>
 
@@ -212,7 +212,7 @@ export default function AgentsPage() {
                       void toggleAgent(a);
                     }}
                   >
-                    {a.is_active ? "⏹ Стоп" : "⚡ Старт"}
+                    {a.is_active ? "⏹ Остановить" : "⚡ Запустить"}
                   </Button>
                   <Button
                     variant="ghost"
@@ -222,7 +222,7 @@ export default function AgentsPage() {
                       void syncAgent(a);
                     }}
                   >
-                    🔄 Синхронизировать
+                    🔄 Обновить конфиг
                   </Button>
                 </div>
               </div>
@@ -234,15 +234,15 @@ export default function AgentsPage() {
       <Modal title="Новый агент" open={createOpen} onClose={() => setCreateOpen(false)}>
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="block text-xs text-text-dim">Тенант (slug)</label>
+            <label className="block text-xs text-text-dim">Идентификатор клиента</label>
             <input
               value={createForm.tenant_slug}
               onChange={(e) => setCreateForm((p) => ({ ...p, tenant_slug: e.target.value }))}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-border-light"
-              placeholder="j-one-studio"
+              placeholder="мой-клиент"
             />
             <div className="text-xs text-text-dim">
-              Если tenant отсутствует в БД, он будет создан автоматически при создании агента.
+              Если клиент отсутствует в базе, он будет создан автоматически при создании агента.
             </div>
             {tenantSuggestions.length > 0 ? (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -260,21 +260,21 @@ export default function AgentsPage() {
             ) : null}
           </div>
           <div className="space-y-2">
-            <label className="block text-xs text-text-dim">Агент (slug)</label>
+            <label className="block text-xs text-text-dim">Идентификатор агента</label>
             <input
               value={createForm.agent_slug}
               onChange={(e) => setCreateForm((p) => ({ ...p, agent_slug: e.target.value }))}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-border-light"
-              placeholder="j-one-sales"
+              placeholder="мой-агент"
             />
           </div>
           <div className="space-y-2">
-            <label className="block text-xs text-text-dim">Имя</label>
+            <label className="block text-xs text-text-dim">Название</label>
             <input
               value={createForm.name}
               onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
               className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none focus:border-border-light"
-              placeholder="Менеджер"
+              placeholder="Менеджер студии"
             />
           </div>
 

@@ -72,7 +72,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
           <div className="flex items-center justify-between px-4 py-4 md:px-6">
             <div className="flex flex-col">
               <div className="font-mono text-lg tracking-tight">AgentBox</div>
-              <div className="text-xs text-text-dim">Техническая консоль</div>
+              <div className="text-xs text-text-dim">Панель управления</div>
             </div>
 
             <button
@@ -116,7 +116,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
                   backendOk === null ? "bg-warning" : backendOk ? "bg-accent" : "bg-danger",
                 ].join(" ")}
               />
-              Бэкенд: {backendOk === null ? "проверка" : backendOk ? "ок" : "офлайн"}
+              Сервер: {backendOk === null ? "проверка..." : backendOk ? "подключён" : "не отвечает"}
             </div>
           </div>
         </div>

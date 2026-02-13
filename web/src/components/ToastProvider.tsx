@@ -83,6 +83,6 @@ export function ToastProvider({ children }: PropsWithChildren) {
 
 export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used inside ToastProvider");
+  if (!ctx) throw new Error("Система уведомлений не инициализирована");
   return ctx;
 }

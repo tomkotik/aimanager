@@ -123,14 +123,14 @@ export default function ChatPage() {
         <div>
           <h1 className="font-mono text-xl">Тестовый чат</h1>
           <div className="mt-1 text-sm text-text-dim">
-            Сообщение проходит через реальный Pipeline, без Umnico/Telegram
+            Сообщение проходит через реальный процесс, без Umnico/Telegram
           </div>
         </div>
       </div>
 
       <Card className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
-          <div className="text-xs text-text-dim">Агент</div>
+          <div className="text-xs text-text-dim">Выберите агента</div>
           <select
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
@@ -167,11 +167,11 @@ export default function ChatPage() {
                 {selectedAgent ? selectedAgent.name : "Агент не выбран"}
               </div>
               <div className="mt-1 text-xs text-text-dim">
-                conversation_id: <span className="font-mono text-text-muted">{conversationId || "-"}</span>
+                ID диалога: <span className="font-mono text-text-muted">{conversationId || "-"}</span>
               </div>
             </div>
             {loading ? (
-              <div className="text-xs text-text-dim">Печатает...</div>
+              <div className="text-xs text-text-dim">Думаю...</div>
             ) : (
               <div className="text-xs text-text-dim">Готов</div>
             )}
@@ -213,7 +213,7 @@ export default function ChatPage() {
                 rows={2}
                 disabled={loading || !agentId}
                 className="flex-1 resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm font-mono outline-none focus:border-border-light disabled:opacity-50"
-                placeholder="Сколько стоит?"
+                placeholder="Напишите сообщение..."
               />
               <Button variant="primary" onClick={() => void send()} disabled={loading || !agentId}>
                 Отправить
@@ -226,14 +226,14 @@ export default function ChatPage() {
         </Card>
 
         <Card className="lg:col-span-4">
-          <div className="font-mono text-sm">Debug</div>
+          <div className="font-mono text-sm">Отладка</div>
           <div className="mt-3 space-y-3 text-xs text-text-muted">
             <div>
-              <div className="text-text-dim">intent</div>
+              <div className="text-text-dim">Намерение</div>
               <div className="font-mono text-text">{debug?.intent || "-"}</div>
             </div>
             <div>
-              <div className="text-text-dim">contract violations</div>
+              <div className="text-text-dim">Нарушения контракта</div>
               {debug?.contract_violations && debug.contract_violations.length > 0 ? (
                 <ul className="mt-1 list-disc pl-4">
                   {debug.contract_violations.map((v, idx) => (
@@ -245,18 +245,18 @@ export default function ChatPage() {
               )}
             </div>
             <div>
-              <div className="text-text-dim">model</div>
+              <div className="text-text-dim">Модель</div>
               <div className="font-mono text-text">{debug?.model || "-"}</div>
             </div>
             <div>
-              <div className="text-text-dim">tokens</div>
+              <div className="text-text-dim">Токены</div>
               <div className="font-mono text-text">
                 {debug ? String(debug.tokens_used) : "-"}
               </div>
             </div>
             <div>
-              <div className="text-text-dim">latency</div>
-              <div className="font-mono text-text">{debug ? `${debug.ms} ms` : "-"}</div>
+              <div className="text-text-dim">Время ответа</div>
+              <div className="font-mono text-text">{debug ? `${debug.ms} мс` : "-"}</div>
             </div>
           </div>
         </Card>

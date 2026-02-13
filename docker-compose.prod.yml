@@ -1,109 +1,141 @@
 services:
   db:
     image: postgres:16-alpine
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_USER: agentbox
-      POSTGRES_PASSWORD: agentbox
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-agentbox}"
       POSTGRES_DB: agentbox
     volumes:
       - agentbox_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agentbox -d agentbox"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   redis:
     image: redis:7-alpine
-    restart: unless-stopped
+    restart: always
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 3s
-      retries: 10
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 64M
 
   app:
     build: .
-    restart: unless-stopped
+    restart: always
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
-      # Force in-compose connectivity.
-      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      DATABASE_URL: "postgresql+asyncpg://agentbox:${DB_PASSWORD:-agentbox}@db:5432/agentbox"
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY}"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
     volumes:
       - ./tenants:/app/tenants
       - ./secrets:/app/secrets
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 2
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  web:
+    build: ./web
+    restart: always
+    environment:
+      NEXT_PUBLIC_API_URL: "${PUBLIC_API_URL}"
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   worker:
     build: .
-    restart: unless-stopped
+    restart: always
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      DATABASE_URL: "postgresql+asyncpg://agentbox:${DB_PASSWORD:-agentbox}@db:5432/agentbox"
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY}"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
     volumes:
       - ./tenants:/app/tenants
       - ./secrets:/app/secrets
-    command: celery -A src.workers.celery_app worker -l info
+    command: celery -A src.workers.celery_app worker -l info --concurrency=2
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   beat:
     build: .
-    restart: unless-stopped
+    restart: always
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://agentbox:agentbox@db:5432/agentbox
+      DATABASE_URL: "postgresql+asyncpg://agentbox:${DB_PASSWORD:-agentbox}@db:5432/agentbox"
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY}"
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
     volumes:
       - ./tenants:/app/tenants
       - ./secrets:/app/secrets
     command: celery -A src.workers.celery_app beat -l info
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
-  web:
-    build:
-      context: ./web
-      args:
-        # Empty => web uses same-origin API behind Caddy.
-        NEXT_PUBLIC_API_URL: ""
-    restart: unless-stopped
-    depends_on:
-      - app
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    depends_on:
-      - app
-      - web
+  nginx:
+    image: nginx:alpine
+    restart: always
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certbot/conf:/etc/letsencrypt:ro
+      - ./nginx/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - app
+      - web
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
 
 volumes:
   agentbox_pgdata:
-  caddy_data:
-  caddy_config:
 

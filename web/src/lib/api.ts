@@ -1,18 +1,11 @@
 const ENV_API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 function resolveApiBase(): string {
-  // In Docker Compose, frontend container can reach backend as `http://app:8000`,
-  // but the browser running on the host machine cannot resolve `app`.
   if (typeof window !== "undefined") {
-    // If not configured explicitly, default to same-origin API (production behind a reverse proxy).
-    if (!ENV_API_BASE) return window.location.origin;
-
-    try {
-      const u = new URL(ENV_API_BASE);
-      if (u.hostname === "app") return "http://localhost:8000";
-    } catch {
-      // Ignore URL parse errors and fall back to env value.
-    }
+    // В браузере: используем тот же домен если env не задан или указывает на docker-internal.
+    const envUrl = ENV_API_BASE || "";
+    if (!envUrl || envUrl.includes("app:")) return window.location.origin;
+    return envUrl;
   }
   return ENV_API_BASE || "http://localhost:8000";
 }
@@ -37,10 +30,10 @@ export function formatApiErrorRu(err: unknown, fallback = "Неизвестна�
   if (err instanceof ApiError) {
     const detail = typeof err.detail === "string" ? err.detail : err.message;
 
-    if (detail === "Tenant not found") return "Тенант не найден";
+    if (detail === "Tenant not found") return "Клиент не найден";
     if (detail.startsWith("Tenant config not found:")) {
       const rest = detail.slice("Tenant config not found:".length).trim();
-      return rest ? `Не найден конфиг тенанта: ${rest}` : "Не найден конфиг тенанта";
+      return rest ? `Не найдены настройки клиента: ${rest}` : "Не найдены настройки клиента";
     }
     if (detail === "Agent already exists") return "Агент уже существует";
 
@@ -72,7 +65,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     const detail =
       body && typeof body === "object" && "detail" in body ? (body as { detail?: unknown }).detail : undefined;
 
-    throw new ApiError(res.status, typeof detail === "string" ? detail : `API error: ${res.status}`, {
+    throw new ApiError(res.status, typeof detail === "string" ? detail : `Ошибка API: ${res.status}`, {
       detail,
       body,
     });
