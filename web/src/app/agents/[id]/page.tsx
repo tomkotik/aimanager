@@ -234,7 +234,7 @@ export default function AgentDetailPage() {
             config: migrated.migrated,
             dialogue_policy: dialoguePolicy,
             actions,
-            tenant_slug: agent.slug,
+            tenant_slug: agent?.slug ?? "preview",
           }),
         }
       );
