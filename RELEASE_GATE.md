@@ -12,12 +12,20 @@ python3 scripts/regression_matrix.py --base-url http://127.0.0.1:8000
 
 2. Если скрипт вернул `exit code != 0` — релиз блокируется.
 
-3. Проверить обязательные outcome-поля по каждому кейсу:
+3. Для production-деплоя gate встроен в `scripts/deploy.sh` (stage 2):
+
+```bash
+GATE_AGENT_ID=<agent_uuid> ./scripts/deploy.sh <domain>
+```
+
+Если `GATE_AGENT_ID` не задан и `GATE_ENABLED=1`, деплой будет остановлен.
+
+4. Проверить обязательные outcome-поля по каждому кейсу:
 - `booking_event_id`
 - `booking_status`
 - `automation_trace` (в БД metadata)
 
-4. Критерии “готовности к рекламе”:
+5. Критерии “готовности к рекламе”:
 - Booking success (free-slot) ≥ 99%
 - False-confirmation = 0
 - Busy detection precision ≥ 99%
