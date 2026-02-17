@@ -235,13 +235,17 @@ async def main() -> int:
 
     results: list[CaseResult] = []
 
-    async with httpx.AsyncClient() as client, asyncpg.connect(db_url) as conn:
-        for name, turns, checker in cases:
-            try:
-                res = await run_case(client, conn, chat_url, name, turns, checker)
-            except Exception as e:
-                res = CaseResult(name=name, conversation_id="", ok=False, reason=f"exception: {e}", turns=[], facts={})
-            results.append(res)
+    async with httpx.AsyncClient() as client:
+        conn = await asyncpg.connect(db_url)
+        try:
+            for name, turns, checker in cases:
+                try:
+                    res = await run_case(client, conn, chat_url, name, turns, checker)
+                except Exception as e:
+                    res = CaseResult(name=name, conversation_id="", ok=False, reason=f"exception: {e}", turns=[], facts={})
+                results.append(res)
+        finally:
+            await conn.close()
 
     summary = {
         "passed": sum(1 for r in results if r.ok),
