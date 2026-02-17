@@ -14,6 +14,7 @@ COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 COPY src ./src
 COPY tenants ./tenants
+COPY scripts ./scripts
 
 EXPOSE 8000
 
