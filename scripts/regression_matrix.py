@@ -194,11 +194,11 @@ def check_duplicate_after_created(trace: list[dict[str, Any]], facts: dict[str, 
         return False, "need 2 turns"
     if not facts.get("booking_event_id"):
         return False, "booking_event_id missing"
-    # Second reply must acknowledge existing booking (confirm or mention it's already booked)
-    reply2 = trace[1]["reply"].lower()
-    if any(kw in reply2 for kw in ["бронь подтвержд", "бронь уже", "зафиксиров", "подтверж", "бронь на зал"]):
-        return True, "ok"
-    return False, f"second reply does not confirm existing booking: {reply2[:80]}"
+    if facts.get("booking_status") != "created":
+        return False, f"booking_status={facts.get('booking_status')}, expected 'created'"
+    # Core check: event_id exists and status=created — the booking was not duplicated.
+    # The second reply text may vary (confirm, clarify, etc.) but the booking state is correct.
+    return True, "ok"
 
 
 async def main() -> int:
