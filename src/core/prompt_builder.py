@@ -1,61 +1,185 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
+
 from src.core.schemas import AgentConfig
+
+# Moscow timezone (UTC+3) — J-One Studio is in Moscow
+MSK = timezone(timedelta(hours=3))
+
+# Few-shot examples: ideal dialogues based on real scripts
+FEW_SHOT_EXAMPLES = """
+## ПРИМЕРЫ ДИАЛОГОВ (следуй этому стилю)
+
+Пример 1 — Запрос цены:
+Клиент: Сколько стоит записать подкаст?
+Менеджер: Съёмка с 1 камерой в зале Агат — от 4 990 ₽/час, минимум 1 час. Цена зависит от зала и количества камер. Для новых клиентов скидка 20% на первую съёмку. Если хотите получить готовый продукт — рекомендую комплекс «Подкаст под ключ» на 3 камеры с монтажом от 29 900 ₽ за 2 часа. На какую дату планируете?
+
+Пример 2 — Вопрос о залах:
+Клиент: Какие у вас залы?
+Менеджер: У нас 5 залов: Агат, Карелия, Уют, Грань и Лофт. Подскажите, сколько человек будет участвовать и какой формат съёмки — подберу подходящий вариант.
+
+Пример 3 — Возражение «дорого»:
+Клиент: Дороговато...
+Менеджер: Для новых клиентов у нас скидка 20% на первую съёмку. Также есть зал Агат — самый доступный, от 4 990 ₽/час. В стоимость уже входит оператор, камеры, микрофоны, свет и гримерка. Хотите рассчитаю стоимость под ваш формат?
+
+Пример 4 — Бронирование:
+Клиент: Хочу записаться на субботу
+Менеджер: Записываю вас! Уточните, пожалуйста: какой зал и формат съёмки вас интересует, на какое время, сколько человек будет участвовать? И оставьте, пожалуйста, ваше имя и номер телефона для брони.
+
+Пример 5 — Что входит в стоимость:
+Клиент: А что входит в цену?
+Менеджер: В стоимость входит: камеры, микрофоны, профессиональный свет, настройка интерьера, оператор-звукорежиссёр, гримерка (1 час), бэкстейджи по запросу и исходники в день записи. Также бесплатные напитки и зона отдыха с ТВ и приставками.
+""".strip()
 
 
 class PromptBuilder:
-    """Builds a system prompt from an agent config and a knowledge base."""
+    """Собирает системный промпт из конфига агента и базы знаний."""
 
     @staticmethod
-    def build(agent_config: AgentConfig, knowledge: dict[str, str], extra_context: str = "") -> str:
+    def build(
+        agent_config: AgentConfig,
+        knowledge: dict[str, str],
+        extra_context: str = "",
+        flow_stage: str | None = None,
+        booking_data: dict | None = None,
+    ) -> str:
         sections: list[str] = []
 
-        sections.append(f"## ROLE\n{agent_config.identity.role}")
-        sections.append(f"## PERSONA\n{agent_config.identity.persona}")
+        # --- Дата и время ---
+        now = datetime.now(MSK)
+        weekdays_ru = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+        day_name = weekdays_ru[now.weekday()]
+        sections.append(
+            f"## ТЕКУЩАЯ ДАТА И ВРЕМЯ\n"
+            f"Сегодня: {now.strftime('%d.%m.%Y')} ({day_name}), время: {now.strftime('%H:%M')} (Москва)."
+        )
+
+        # --- Роль и персона ---
+        sections.append(f"## РОЛЬ\n{agent_config.identity.role}")
+        sections.append(f"## ПЕРСОНА\n{agent_config.identity.persona}")
         if agent_config.identity.fallback_phrase:
             sections.append(
-                f'If asked who you are, say: "{agent_config.identity.fallback_phrase}"'
+                f'Если спросят кто ты — отвечай: "{agent_config.identity.fallback_phrase}"'
             )
 
+        # --- Стиль ---
         style = agent_config.style
         style_lines = [
-            f"- Tone: {style.tone}",
-            f"- Politeness: {style.politeness}",
-            f"- Emoji: {style.emoji_policy}",
-            f"- Max sentences per reply: {style.max_sentences}",
-            f"- Max questions per reply: {style.max_questions}",
+            f"- Тон: {style.tone}",
+            f"- Обращение: на «{style.politeness}»",
+            f"- Эмодзи: {style.emoji_policy} (максимум 1-2 за сообщение)",
+            f"- Максимум предложений в ответе: {style.max_sentences}",
+            f"- Максимум вопросов в ответе: {style.max_questions}",
         ]
         if style.clean_text:
-            style_lines.append("- NO markdown. No **bold**, # headers, [links]. Plain text only.")
-        sections.append("## STYLE\n" + "\n".join(style_lines))
+            style_lines.append("- БЕЗ markdown-разметки. Никаких **жирный**, # заголовков, [ссылок](url). Только чистый текст.")
+        sections.append("## СТИЛЬ ОБЩЕНИЯ\n" + "\n".join(style_lines))
 
+        # --- Правила ---
         if agent_config.rules:
             rules_text: list[str] = []
             for i, rule in enumerate(agent_config.rules, 1):
                 rule_line = f"{i}. [{rule.priority.upper()}] {rule.description}"
                 if rule.positive_example:
-                    rule_line += f"\n   ✓ Correct: {rule.positive_example}"
+                    rule_line += f"\n   ✓ Правильно: {rule.positive_example}"
                 if rule.negative_example:
-                    rule_line += f"\n   ✗ Wrong: {rule.negative_example}"
+                    rule_line += f"\n   ✗ Неправильно: {rule.negative_example}"
                 rules_text.append(rule_line)
-            sections.append("## CRITICAL RULES\n" + "\n".join(rules_text))
+            sections.append("## ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА\n" + "\n".join(rules_text))
 
+        # --- База знаний ---
         if knowledge:
             kb_text = "\n\n".join(
                 [f"### {name.upper().replace('_', ' ')}\n{content}" for name, content in knowledge.items()]
             )
-            sections.append(f"## KNOWLEDGE BASE\n{kb_text}")
+            sections.append(f"## БАЗА ЗНАНИЙ\n{kb_text}")
 
+        # --- Примеры диалогов ---
+        sections.append(FEW_SHOT_EXAMPLES)
+
+        # --- Conversation Flow State (NEW) ---
+        if flow_stage or booking_data:
+            flow_section = "## ТЕКУЩИЙ ЭТАП ДИАЛОГА\n"
+            
+            if flow_stage:
+                stage_descriptions = {
+                    "qualify": "Квалификация — выявление потребности клиента (формат, кол-во человек, бюджет)",
+                    "offer": "Предложение — подбор зала и формата, расчет стоимости",
+                    "close": "Закрытие — сбор данных для бронирования (дата, время, контакты)",
+                    "finalize": "Финализация — подтверждение брони и детали",
+                }
+                flow_section += f"Этап: **{flow_stage.upper()}** — {stage_descriptions.get(flow_stage, 'Неизвестный этап')}\n\n"
+            
+            if booking_data:
+                flow_section += "**Собранные данные:**\n"
+                fields = {
+                    "format": "Формат",
+                    "room": "Зал",
+                    "date": "Дата",
+                    "time": "Время",
+                    "duration": "Длительность",
+                    "participants": "Участников",
+                    "name": "Имя",
+                    "phone": "Телефон",
+                }
+                for key, label in fields.items():
+                    value = booking_data.get(key)
+                    if value:
+                        flow_section += f"- {label}: {value}\n"
+                    else:
+                        flow_section += f"- {label}: _не указан_\n"
+                
+                flow_section += "\n**Следующий шаг:** Собери недостающие данные для завершения брони.\n"
+            
+            sections.append(flow_section)
+
+        # --- Дополнительный контекст ---
         if extra_context:
-            sections.append(f"## CURRENT CONTEXT\n{extra_context}")
+            sections.append(f"## ТЕКУЩИЙ КОНТЕКСТ\n{extra_context}")
 
-        sections.append(
-            "## OUTPUT RULES\n"
-            "1. Reply in the same language as the user.\n"
-            "2. If the user mentions a relative date ('tomorrow', 'next Tuesday'), "
-            "always reply with an explicit date (DD.MM.YYYY) and time (HH:MM).\n"
-            "3. Follow all CRITICAL RULES above. Violations are forbidden."
-        )
+        # --- Выходные правила ---
+        output_rules = [
+            "## ПРАВИЛА ОТВЕТА",
+            "1. Отвечай на том же языке, что и клиент.",
+            "2. Если клиент называет относительную дату ('завтра', 'в субботу', 'на следующей неделе'), "
+            "подтверждай конкретной датой (ДД.ММ.ГГГГ).",
+            "3. Строго соблюдай все ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА выше.",
+            "4. Сначала отвечай на прямой вопрос клиента, потом делай апсейл (если уместен).",
+            "5. Не выдумывай информацию. Бери данные только из БАЗЫ ЗНАНИЙ.",
+            "6. Завершай каждое сообщение призывом к действию (выбор даты, зала, формата).",
+            "",
+            "### УПРАВЛЯЮЩИЕ ТЕГИ (используй когда нужно):",
+            "",
+            "**[ACTION:ESCALATE]** — Используй когда:",
+            "- Клиент просит связаться с живым человеком",
+            "- Вопрос выходит за рамки твоих компетенций",
+            "- Клиент недоволен или конфликтует",
+            "- Нужно обсудить специальные условия",
+            "",
+            "**[ACTION:RESET]** — Используй когда:",
+            "- Клиент явно хочет начать диалог заново",
+            "- Меняется тема разговора кардинально",
+            "",
+            "**[BOOKING:дата|время|длительность|зал|имя|телефон]** — Используй когда собраны ВСЕ данные:",
+            "- Дата (формат: ДД.ММ.ГГГГ)",
+            "- Время (формат: ЧЧ:ММ)",
+            "- Длительность (в часах, например: 2 или 3)",
+            "- Зал (Агат/Карелия/Уют/Грань/Лофт)",
+            "- Имя клиента",
+            "- Телефон клиента",
+            "",
+            "Примеры:",
+            "- [BOOKING:24.02.2026|14:00|2|Агат|Иван Петров|+79161234567]",
+            "- [BOOKING:17.02.2026|18:00|3|Уют|Мария|+79261234567]",
+            "",
+            "⚠️ ВАЖНО:",
+            "1. Генерируй тег [BOOKING:...] ТОЛЬКО когда все 6 полей заполнены!",
+            "2. Длительность ОБЯЗАТЕЛЬНО указывай цифрой (количество часов).",
+            "3. Если клиент не указал длительность — уточни перед генерацией тега.",
+            "4. Не выдумывай данные — если чего-то не хватает, спроси клиента.",
+        ]
+        
+        sections.append("\n".join(output_rules))
 
         return "\n\n".join(sections)
-

@@ -28,20 +28,23 @@ class IntentRouter:
         self.fallback = fallback
 
     def detect(self, text: str) -> str:
+        """Backward-compatible shortcut returning only intent id."""
+        intent_id, _confidence = self.detect_with_confidence(text)
+        return intent_id
+
+    def detect_with_confidence(self, text: str) -> tuple[str, float]:
         """
-        Detect the intent for the given user message.
+        Detect intent and return a simple confidence score.
 
-        Args:
-            text: Raw user message text.
-
-        Returns:
-            Intent ID string (e.g. "PRICING", "ADDRESS", "GREETING").
+        Confidence is heuristic-based (marker overlap quality):
+        - exact marker hit -> 0.95
+        - fallback -> 0.25
         """
         lower = text.lower()
         for intent in self.intents:
             if self._matches(lower, intent.markers):
-                return intent.id
-        return self.fallback
+                return intent.id, 0.95
+        return self.fallback, 0.25
 
     def get_intent_config(self, intent_id: str) -> IntentConfig | None:
         """Return the full IntentConfig for a given intent ID, or None."""

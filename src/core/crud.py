@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.models import Agent, Conversation, Message, Tenant
 
@@ -92,3 +93,22 @@ async def save_message(
     db.add(msg)
     await db.flush()
     return msg
+
+
+async def update_conversation_state(db: AsyncSession, conversation_id: UUID, state: dict) -> Conversation | None:
+    """Persist conversation.state safely for nested JSON updates."""
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = result.scalar_one_or_none()
+    if conv is None:
+        return None
+
+    current = conv.state if isinstance(conv.state, dict) else {}
+
+    # Merge top-level keys to avoid accidental state wipe by partial updates.
+    merged = dict(current)
+    merged.update(state or {})
+
+    conv.state = merged
+    flag_modified(conv, "state")
+    await db.flush()
+    return conv

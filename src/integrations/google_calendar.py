@@ -7,7 +7,7 @@ Uses Google Calendar API via service account.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.integrations.base import IntegrationAdapter
 
@@ -50,46 +50,100 @@ class GoogleCalendarAdapter(IntegrationAdapter):
 
     async def check_availability(self, params: dict) -> dict:
         """
-        Check if a time slot is available by fetching the ICS feed.
+        Check if a time slot is available for a specific room.
 
-        Args:
-            params: {"start": datetime, "duration_hours": int (optional)}
-
-        Returns:
-            {"success": True, "available": bool}
+        If room is provided, checks overlapping events and filters by room name in
+        summary (expected format: "... / <room>"). This allows shared calendar with
+        parallel bookings in different rooms.
         """
-        if not self.ics_url:
-            logger.warning("No ICS URL configured — assuming slot is free")
-            return {"success": True, "available": True}
-
-        import httpx
-
         try:
             start = params["start"]
             if isinstance(start, str):
                 start = datetime.fromisoformat(start)
             duration = params.get("duration_hours", self.default_duration)
+            room = str(params.get("room", "") or "").strip()
             end = start + timedelta(hours=duration)
 
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(self.ics_url, timeout=10.0)
-                ics_text = resp.text
+            # Normalize to timezone-aware datetimes for Google API.
+            msk = timezone(timedelta(hours=3))
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=msk)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=msk)
 
-            events = self._parse_ics_events(ics_text)
+            # 1) Preferred: check via Google Calendar API with service account.
+            sa_path = self.config.get("service_account_path", "")
+            if sa_path and self.calendar_id:
+                try:
+                    from google.oauth2 import service_account
+                    from googleapiclient.discovery import build
 
-            overlaps = [
-                e
-                for e in events
-                if e.get("start") and e.get("end") and start < e["end"] and end > e["start"]
-            ]
+                    credentials = service_account.Credentials.from_service_account_file(
+                        sa_path,
+                        scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+                    )
+                    service = build("calendar", "v3", credentials=credentials)
 
-            available = len(overlaps) == 0
-            return {"success": True, "available": available}
+                    events_result = (
+                        service.events()
+                        .list(
+                            calendarId=self.calendar_id,
+                            timeMin=start.isoformat(),
+                            timeMax=end.isoformat(),
+                            singleEvents=True,
+                            orderBy="startTime",
+                        )
+                        .execute()
+                    )
+                    events = events_result.get("items", [])
+
+                    if not room:
+                        return {"success": True, "available": len(events) == 0, "conflicting_rooms": []}
+
+                    room_lower = room.lower()
+                    conflicting = [
+                        e for e in events if room_lower in str(e.get("summary", "")).lower()
+                    ]
+
+                    busy_rooms: list[str] = []
+                    for e in events:
+                        summary = str(e.get("summary", ""))
+                        if "/" in summary:
+                            candidate = summary.split("/")[-1].strip()
+                            if candidate and candidate not in busy_rooms:
+                                busy_rooms.append(candidate)
+
+                    return {
+                        "success": True,
+                        "available": len(conflicting) == 0,
+                        "conflicting_rooms": busy_rooms,
+                    }
+                except Exception as api_err:
+                    logger.warning("Calendar API availability check failed, fallback to ICS: %s", api_err)
+
+            # 2) Fallback: public ICS feed (without room filtering).
+            if self.ics_url:
+                import httpx
+
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(self.ics_url, timeout=10.0)
+                    ics_text = resp.text
+
+                events = self._parse_ics_events(ics_text)
+                overlaps = [
+                    e
+                    for e in events
+                    if e.get("start") and e.get("end") and start < e["end"] and end > e["start"]
+                ]
+                return {"success": True, "available": len(overlaps) == 0, "conflicting_rooms": []}
+
+            # 3) Fail-open fallback.
+            logger.warning("No Calendar API/ICS configured for availability — assuming free")
+            return {"success": True, "available": True, "conflicting_rooms": []}
 
         except Exception as e:
             logger.error("Calendar availability check failed: %s", e)
-            # Fail open: assume free.
-            return {"success": True, "available": True}
+            return {"success": True, "available": True, "conflicting_rooms": []}
 
     async def create_booking(self, params: dict) -> dict:
         """
@@ -127,11 +181,19 @@ class GoogleCalendarAdapter(IntegrationAdapter):
             if isinstance(end, str):
                 end = datetime.fromisoformat(end)
 
+            msk = timezone(timedelta(hours=3))
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=msk)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=msk)
+
+            # Google Calendar requires timezone when dateTime is naive.
+            # Use Europe/Moscow by default for J-One Studio.
             event = {
                 "summary": params.get("summary", "Booking"),
                 "description": params.get("description", ""),
-                "start": {"dateTime": start.isoformat()},
-                "end": {"dateTime": end.isoformat()},
+                "start": {"dateTime": start.isoformat(), "timeZone": "Europe/Moscow"},
+                "end": {"dateTime": end.isoformat(), "timeZone": "Europe/Moscow"},
             }
 
             result = service.events().insert(
