@@ -29,6 +29,12 @@ class IntentLock:
     def __init__(self, lock_turns: int = 2):
         self.lock_turns = lock_turns
 
+    def _lock_turns_for_intent(self, intent_id: str) -> int:
+        # Greeting should not lock follow-up turns (prevents "Привет" -> repeated greeting loop).
+        if intent_id == "GREETING":
+            return 0
+        return self.lock_turns
+
     def apply(
         self,
         state: dict,
@@ -59,7 +65,7 @@ class IntentLock:
             if self._should_override(raw_intent, locked, intents):
                 # Higher-priority intent breaks the lock.
                 state[self.KEY_LOCKED] = raw_intent
-                state[self.KEY_TURNS_LEFT] = self.lock_turns
+                state[self.KEY_TURNS_LEFT] = self._lock_turns_for_intent(raw_intent)
                 return raw_intent
             # Lock holds: keep the locked intent.
             state[self.KEY_TURNS_LEFT] = turns_left - 1
@@ -68,9 +74,9 @@ class IntentLock:
         # No active lock (or lock expired) -> set new lock.
         if raw_intent != locked:
             state[self.KEY_LOCKED] = raw_intent
-            state[self.KEY_TURNS_LEFT] = self.lock_turns
+            state[self.KEY_TURNS_LEFT] = self._lock_turns_for_intent(raw_intent)
         else:
-            state[self.KEY_TURNS_LEFT] = 0
+            state[self.KEY_TURNS_LEFT] = self._lock_turns_for_intent(raw_intent)
 
         return raw_intent
 
