@@ -62,4 +62,7 @@
 - `ops/POSTMORTEM_TEMPLATE.md` — шаблон постмортема.
 - `ops/WEEKLY_RELIABILITY_REVIEW_TEMPLATE.md` — weekly reliability review.
 - `scripts/reliability_report.py` — KPI snapshot (success/false-confirm/p95/busy precision).
+- `scripts/reliability_cycle.py` + `scripts/install_reliability_cron.sh` — daily/weekly automation contour.
+  - установлен cron в production на `f5daae28-ff35-455e-a6a3-db655ba4ef6a` (daily + weekly jobs).
+- `ops/RELIABILITY_AUTOMATION.md` — инструкция по автоконтру reliability.
 - `GET /api/v1/analytics/reliability` — SLO/KPI API для дашборда.

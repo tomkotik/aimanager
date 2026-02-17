@@ -14,7 +14,7 @@ def _normalize_db_url(url: str) -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://")
 
 
-async def build_report(db_url: str, hours: int) -> dict:
+async def build_report(db_url: str, hours: int, agent_id: str | None = None) -> dict:
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     conn = await asyncpg.connect(_normalize_db_url(db_url))
     try:
@@ -24,11 +24,13 @@ async def build_report(db_url: str, hours: int) -> dict:
             select
               coalesce(state->'flow'->>'booking_status', '') as booking_status,
               count(*)::int as cnt
-            from conversations
-            where updated_at >= $1
+            from conversations c
+            where c.updated_at >= $1
+              and ($2::uuid is null or c.agent_id = $2::uuid)
             group by 1
             """,
             since,
+            agent_id,
         )
         counts = {r["booking_status"]: r["cnt"] for r in rows}
 
@@ -45,8 +47,10 @@ async def build_report(db_url: str, hours: int) -> dict:
             """
             select count(*)::int
             from messages m
+            join conversations c on c.id = m.conversation_id
             where m.role='assistant'
               and m.created_at >= $1
+              and ($2::uuid is null or c.agent_id = $2::uuid)
               and (
                     lower(m.content) like '%бронь подтвержд%'
                  or lower(m.content) like '%бронирование подтвержд%'
@@ -55,6 +59,7 @@ async def build_report(db_url: str, hours: int) -> dict:
               and coalesce(m.metadata->>'booking_event_id','') = ''
             """,
             since,
+            agent_id,
         )
 
         # p95 latency from assistant metadata.latency_ms
@@ -64,11 +69,14 @@ async def build_report(db_url: str, hours: int) -> dict:
                 order by (m.metadata->>'latency_ms')::numeric
             )
             from messages m
+            join conversations c on c.id = m.conversation_id
             where m.role='assistant'
               and m.created_at >= $1
+              and ($2::uuid is null or c.agent_id = $2::uuid)
               and coalesce(m.metadata->>'latency_ms','') ~ '^[0-9]+(\\.[0-9]+)?$'
             """,
             since,
+            agent_id,
         )
 
         # Busy precision proxy: busy replies that have busy status in flow-state.
@@ -76,11 +84,14 @@ async def build_report(db_url: str, hours: int) -> dict:
             """
             select count(*)::int
             from messages m
+            join conversations c on c.id = m.conversation_id
             where m.role='assistant'
               and m.created_at >= $1
+              and ($2::uuid is null or c.agent_id = $2::uuid)
               and lower(m.content) like '%слот%занят%'
             """,
             since,
+            agent_id,
         )
         busy_reply_with_busy_state = await conn.fetchval(
             """
@@ -89,10 +100,12 @@ async def build_report(db_url: str, hours: int) -> dict:
             join conversations c on c.id = m.conversation_id
             where m.role='assistant'
               and m.created_at >= $1
+              and ($2::uuid is null or c.agent_id = $2::uuid)
               and lower(m.content) like '%слот%занят%'
               and coalesce(c.state->'flow'->>'booking_status','') in ('busy','busy_escalated')
             """,
             since,
+            agent_id,
         )
         busy_precision = (
             round((busy_reply_with_busy_state / busy_reply_total) * 100, 2)
@@ -102,6 +115,7 @@ async def build_report(db_url: str, hours: int) -> dict:
 
         return {
             "window_hours": hours,
+            "agent_id": agent_id,
             "since_utc": since.isoformat(),
             "counts": {
                 "created": created,
@@ -124,6 +138,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db-url", default=os.getenv("DATABASE_URL", ""))
     parser.add_argument("--hours", type=int, default=24)
+    parser.add_argument("--agent-id", default=os.getenv("AGENT_ID", ""))
     parser.add_argument("--out", default="")
     args = parser.parse_args()
 
@@ -131,7 +146,7 @@ async def main() -> int:
         print("ERROR: --db-url or DATABASE_URL is required")
         return 1
 
-    report = await build_report(args.db_url, args.hours)
+    report = await build_report(args.db_url, args.hours, agent_id=(args.agent_id or None))
     text = json.dumps(report, ensure_ascii=False, indent=2)
     print(text)
 

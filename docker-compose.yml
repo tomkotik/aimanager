@@ -43,6 +43,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./tenants:/app/tenants
+      - ./scripts:/app/scripts
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
   web:
@@ -70,6 +71,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./tenants:/app/tenants
+      - ./scripts:/app/scripts
     command: celery -A src.workers.celery_app worker -l info
 
   beat:
@@ -88,6 +90,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./tenants:/app/tenants
+      - ./scripts:/app/scripts
     command: celery -A src.workers.celery_app beat -l info
 
 volumes:
