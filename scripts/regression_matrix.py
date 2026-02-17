@@ -131,7 +131,17 @@ async def run_case(
         conv = j.get("conversation_id", conv)
         trace.append({"user": t, "reply": j.get("reply", "")})
 
-    facts = await _fetch_facts(conn, conv)
+    # DB commit for the last turn may land slightly after HTTP response in loaded environments.
+    # Retry fact-read briefly until we see the final assistant reply persisted.
+    expected_last_reply = (trace[-1]["reply"] if trace else "").strip()
+    facts: dict[str, Any] = {}
+    for _ in range(12):
+        facts = await _fetch_facts(conn, conv)
+        persisted_last_reply = str(facts.get("last_reply") or "").strip()
+        if not expected_last_reply or persisted_last_reply == expected_last_reply:
+            break
+        await asyncio.sleep(0.25)
+
     ok, reason = checker(trace, facts)
     return CaseResult(name=name, conversation_id=conv, ok=ok, reason=reason, turns=trace, facts=facts)
 
