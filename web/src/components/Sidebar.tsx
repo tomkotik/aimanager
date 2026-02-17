@@ -22,6 +22,7 @@ const NAV: NavItem[] = [
   { href: "/conversations", label: "💬 Диалоги" },
   { href: "/secrets", label: "🔑 Секреты" },
   { href: "/analytics", label: "📊 Аналитика" },
+  { href: "/reliability", label: "🛡️ Надёжность" },
   { href: "/chat", label: "🧪 Тестовый чат" },
 ];
 

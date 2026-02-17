@@ -99,6 +99,20 @@ export type ConfigValidateRuntimeResponse = {
   errors: string[];
 };
 
+export type ReliabilityOverviewResponse = {
+  window_hours: number;
+  finalized_conversations: number;
+  created_count: number;
+  busy_count: number;
+  busy_escalated_count: number;
+  pending_manager_count: number;
+  booking_success_rate_pct: number | null;
+  busy_detection_precision_pct: number | null;
+  false_confirmation_count: number;
+  p95_latency_ms: number | null;
+  critical_incident_count: number;
+};
+
 export type AgentChatResponse = {
   reply: string;
   conversation_id: UUID;
