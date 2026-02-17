@@ -479,10 +479,13 @@ class MessagePipeline:
                         ctx.outgoing.metadata["booking_event_id"] = event_id
                     flow_state["booking_event_id"] = event_id
                     flow_state["booking_status"] = "created"
+                    flow_state["last_booking_attempt_fingerprint"] = self._booking_fingerprint(flow_state.get("booking_data", {}) or {})
                     flow_state["stage"] = "finalize"
                     booking_finalized_now = True
                 elif booking_result.get("reason") == "slot_busy":
                     flow_state["booking_status"] = "busy"
+                    flow_state["last_conflicting_rooms"] = booking_result.get("conflicting_rooms") or []
+                    flow_state["last_booking_attempt_fingerprint"] = self._booking_fingerprint(flow_state.get("booking_data", {}) or {})
                     if ctx.outgoing:
                         busy_rooms = booking_result.get("conflicting_rooms") or []
                         rooms_hint = f" Сейчас заняты: {', '.join(busy_rooms)}." if busy_rooms else ""
@@ -517,7 +520,15 @@ class MessagePipeline:
         booking_data = (flow_state or {}).get("booking_data", {})
         required = ["date", "time", "duration", "room", "name", "phone"]
         has_all_booking_fields = all(booking_data.get(k) for k in required)
-        if has_all_booking_fields and "CREATE_BOOKING" not in (ctx.actions_to_run or []):
+        booking_fingerprint = self._booking_fingerprint(booking_data)
+        last_attempt_fingerprint = str(flow_state.get("last_booking_attempt_fingerprint") or "")
+        should_run_fallback_booking = (
+            has_all_booking_fields
+            and "CREATE_BOOKING" not in (ctx.actions_to_run or [])
+            and (not last_attempt_fingerprint or last_attempt_fingerprint != booking_fingerprint)
+        )
+
+        if should_run_fallback_booking:
             ctx.booking_data = booking_data
             booking_result = await self._handle_create_booking(ctx)
             if booking_result.get("success") and booking_result.get("event_id"):
@@ -526,9 +537,12 @@ class MessagePipeline:
                     ctx.outgoing.metadata["booking_event_id"] = event_id
                 flow_state["booking_event_id"] = event_id
                 flow_state["booking_status"] = "created"
+                flow_state["last_booking_attempt_fingerprint"] = booking_fingerprint
                 booking_finalized_now = True
             elif booking_result.get("reason") == "slot_busy":
                 flow_state["booking_status"] = "busy"
+                flow_state["last_conflicting_rooms"] = booking_result.get("conflicting_rooms") or []
+                flow_state["last_booking_attempt_fingerprint"] = booking_fingerprint
                 if ctx.outgoing:
                     busy_rooms = booking_result.get("conflicting_rooms") or []
                     rooms_hint = f" Сейчас заняты: {', '.join(busy_rooms)}." if busy_rooms else ""
@@ -753,7 +767,7 @@ class MessagePipeline:
         import re
 
         phone_match = re.search(r"\+?\d[\d\s\-\(\)]{7,}", text)
-        if phone_match and not booking_data.get("phone"):
+        if phone_match:
             booking_data["phone"] = phone_match.group().strip()
 
         # Name parsing from user text ("имя Иван", "меня зовут Иван").
@@ -772,16 +786,21 @@ class MessagePipeline:
                 booking_data["room"] = room.capitalize()
                 break
 
-        # Absolute date: DD.MM[.YYYY]
+        # Absolute date: DD.MM[.YYYY] (explicit user correction always overrides stale value)
         date_match = re.search(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b", text)
-        if date_match and not booking_data.get("date"):
+        if date_match:
             dd = int(date_match.group(1))
             mm = int(date_match.group(2))
             yyyy = int(date_match.group(3)) if date_match.group(3) else datetime.now().year
             booking_data["date"] = f"{dd:02d}.{mm:02d}.{yyyy}"
 
-        # Relative date keywords.
-        if not booking_data.get("date"):
+        # Relative date keywords (also override stale value when user explicitly re-specifies date).
+        low = text_lower
+        has_relative_date = any(token in low for token in [
+            "сегодня", "завтра", "послезавтра",
+            "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот", "воскресен",
+        ])
+        if has_relative_date and not date_match:
             now = datetime.now()
             weekday_map = {
                 "понедельник": 0,
@@ -793,7 +812,6 @@ class MessagePipeline:
                 "воскресен": 6,
             }
             resolved = None
-            low = text_lower
             if "сегодня" in low:
                 resolved = now
             elif "завтра" in low:
@@ -816,17 +834,17 @@ class MessagePipeline:
                 booking_data["date"] = resolved.strftime("%d.%m.%Y")
 
         time_match = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
-        if time_match and not booking_data.get("time"):
+        if time_match:
             hh = int(time_match.group(1))
             mi = int(time_match.group(2))
             booking_data["time"] = f"{hh:02d}:{mi:02d}"
 
         dur_match = re.search(r"(?:на\s*)?(\d{1,2})\s*час", text_lower)
-        if dur_match and not booking_data.get("duration"):
+        if dur_match:
             booking_data["duration"] = int(dur_match.group(1))
 
         # Also support durations written with words: "два часа", "пять часов".
-        if not booking_data.get("duration"):
+        if not dur_match:
             word_to_num = {
                 "один": 1, "одна": 1,
                 "два": 2, "две": 2,
@@ -847,7 +865,7 @@ class MessagePipeline:
                     break
 
         part_match = re.search(r"(\d{1,2})\s*(чел|человек|участ)", text_lower)
-        if part_match and not booking_data.get("participants"):
+        if part_match:
             booking_data["participants"] = int(part_match.group(1))
 
         required_fields = ["date", "time", "duration", "room", "name", "phone"]
@@ -862,6 +880,10 @@ class MessagePipeline:
         else:
             flow_state["stage"] = "finalize"
 
+        # If previous attempt was busy, keep conversation in offer mode until slot changes.
+        if flow_state.get("booking_status") == "busy":
+            flow_state["stage"] = "offer"
+
         flow_state["booking_data"] = booking_data
         logger.debug(
             "Flow stage: %s, collected: %d/%d fields",
@@ -869,6 +891,15 @@ class MessagePipeline:
             collected_fields,
             len(required_fields),
         )
+
+    @staticmethod
+    def _booking_fingerprint(booking_data: dict) -> str:
+        """Stable key for requested slot+contact to prevent repeated busy loops."""
+        if not isinstance(booking_data, dict):
+            return ""
+        keys = ["date", "time", "duration", "room", "name", "phone"]
+        parts = [str(booking_data.get(k, "")).strip().lower() for k in keys]
+        return "|".join(parts)
 
     async def _run_config_automations(self, ctx: PipelineContext, flow_state: dict) -> None:
         """Run configurable automations from agent.config.automations."""
