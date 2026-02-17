@@ -102,6 +102,7 @@ async def telegram_webhook(
         from src.core.pipeline import MessagePipeline, PipelineContext
 
         incoming.metadata["agent_id"] = str(agent.id)
+        incoming.metadata["tenant_slug"] = tenant.slug
         incoming.metadata["config_version"] = config_version
 
         conv, is_new = await get_or_create_conversation(
@@ -250,6 +251,7 @@ async def umnico_webhook(
         from src.core.pipeline import MessagePipeline, PipelineContext
 
         incoming.metadata["agent_id"] = str(agent.id)
+        incoming.metadata["tenant_slug"] = tenant.slug
         incoming.metadata["config_version"] = config_version
 
         conv, is_new = await get_or_create_conversation(

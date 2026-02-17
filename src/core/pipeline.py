@@ -722,9 +722,10 @@ class MessagePipeline:
         try:
             from src.integrations.telegram_notify import TelegramNotifier
 
-            notifier = TelegramNotifier.from_secrets()
+            tenant_slug = str(ctx.incoming.metadata.get("tenant_slug") or "j-one-studio")
+            notifier = TelegramNotifier.from_secrets(tenant_slug=tenant_slug)
             if not notifier:
-                logger.warning("Telegram notifier not configured, skipping escalation")
+                logger.warning("Telegram notifier not configured, skipping escalation (tenant=%s)", tenant_slug)
                 return {"success": False, "reason": "notifier_not_configured"}
 
             client_name = ctx.incoming.sender_name
