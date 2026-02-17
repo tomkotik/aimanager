@@ -7,7 +7,11 @@ import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { useToast } from "@/components/ToastProvider";
 import { apiFetch, formatApiErrorRu } from "@/lib/api";
-import { AgentDetailResponse } from "@/types/api";
+import {
+  AgentDetailResponse,
+  ConfigMigrateResponse,
+  ConfigValidateRuntimeResponse,
+} from "@/types/api";
 
 type TabId = "main" | "rules" | "intents" | "channels";
 
@@ -209,17 +213,60 @@ export default function AgentDetailPage() {
   async function save() {
     try {
       setSaving(true);
+
+      // 1) Migrate config schema to latest before save.
+      const migrated = await apiFetch<ConfigMigrateResponse>("/api/v1/agents/config/migrate", {
+        method: "POST",
+        body: JSON.stringify({ config }),
+      });
+
+      // 2) Validate + build runtime payload (no manual code path).
+      const actionsRaw = asObject(agent.actions_config).actions;
+      const actions = Array.isArray(actionsRaw)
+        ? actionsRaw.filter((x) => typeof x === "object" && x && !Array.isArray(x))
+        : [];
+
+      const validation = await apiFetch<ConfigValidateRuntimeResponse>(
+        "/api/v1/agents/config/validate-runtime",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            config: migrated.migrated,
+            dialogue_policy: dialoguePolicy,
+            actions,
+            tenant_slug: agent.slug,
+          }),
+        }
+      );
+
+      if (!validation.valid) {
+        const msg = validation.errors?.length
+          ? validation.errors.slice(0, 3).join("; ")
+          : "Конфигурация не прошла валидацию";
+        toast.push({
+          variant: "error",
+          title: "Ошибка валидации конфигурации",
+          message: msg,
+        });
+        return;
+      }
+
+      // 3) Persist validated config.
       const updated = await apiFetch<AgentDetailResponse>(`/api/v1/agents/${agentId}`, {
         method: "PATCH",
         body: JSON.stringify({
-          config,
+          config: migrated.migrated,
           dialogue_policy: dialoguePolicy,
         }),
       });
       setAgent(updated);
       setConfig(normalizeConfig(updated.config));
       setDialoguePolicy(normalizeDialoguePolicy(updated.dialogue_policy));
-      toast.push({ variant: "success", title: "Сохранено" });
+      toast.push({
+        variant: "success",
+        title: "Сохранено",
+        message: `Схема: ${validation.schema_version}`,
+      });
     } catch (e) {
       toast.push({
         variant: "error",
@@ -254,6 +301,9 @@ export default function AgentDetailPage() {
           <h1 className="mt-1 truncate font-mono text-xl">{agent.name}</h1>
           <div className="mt-1 text-sm text-text-dim">
             Идентификатор: <span className="font-mono text-text-muted">{agent.slug}</span>
+          </div>
+          <div className="mt-1 text-xs text-text-dim">
+            Версия схемы: <span className="font-mono text-text-muted">{asString(asObject(config).schema_version, "1.0.0")}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">

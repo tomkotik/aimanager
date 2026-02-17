@@ -86,6 +86,19 @@ export type AnalyticsOverviewResponse = {
   conversations_by_channel: AnalyticsConversationsByChannel[];
 };
 
+export type ConfigMigrateResponse = {
+  from_version: string;
+  to_version: string;
+  migrated: Record<string, unknown>;
+};
+
+export type ConfigValidateRuntimeResponse = {
+  valid: boolean;
+  schema_version: string;
+  runtime_config: Record<string, unknown> | null;
+  errors: string[];
+};
+
 export type AgentChatResponse = {
   reply: string;
   conversation_id: UUID;
