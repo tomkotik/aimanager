@@ -23,9 +23,9 @@
 - [ ] Версионирование схемы + миграции.
 
 ## 4) Ops Core
-- [ ] Канареечный релиз + rollback.
+- [x] Канареечный релиз + rollback (runbook + staged deploy).
 - [ ] SLO-дашборд (availability, success-rate booking, p95 latency, incident count).
-- [ ] Postmortem-шаблон и weekly reliability review.
+- [x] Postmortem-шаблон и weekly reliability review.
 
 ---
 
@@ -54,3 +54,7 @@
 - `scripts/release_gate.sh` — gate-обёртка: release block при падении критичных кейсов.
 - `RELEASE_GATE.md` — правила блокировки релиза при падении критики.
 - `src/core/state_contract.py` — нормализация/валидация transactional flow-state.
+- `ops/CANARY_ROLLBACK_RUNBOOK.md` — canary/rollback runbook.
+- `ops/POSTMORTEM_TEMPLATE.md` — шаблон постмортема.
+- `ops/WEEKLY_RELIABILITY_REVIEW_TEMPLATE.md` — weekly reliability review.
+- `scripts/reliability_report.py` — KPI snapshot (success/false-confirm/p95/busy precision).
