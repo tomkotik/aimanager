@@ -781,11 +781,17 @@ class MessagePipeline:
         if ctx.incoming.sender_name and not booking_data.get("name"):
             booking_data["name"] = ctx.incoming.sender_name
 
-        for room in ["агат", "карелия", "уют", "грань", "лофт"]:
-            if room in text_lower:
-                # Explicit user correction should override stale room.
-                booking_data["room"] = room.capitalize()
-                break
+        # Room extraction: if user mentions several rooms ("вместо Грань Лофт"),
+        # pick the last mentioned one as explicit correction target.
+        room_tokens = ["агат", "карелия", "уют", "грань", "лофт"]
+        room_hits: list[tuple[int, str]] = []
+        for room in room_tokens:
+            idx = text_lower.rfind(room)
+            if idx >= 0:
+                room_hits.append((idx, room))
+        if room_hits:
+            _pos, room = sorted(room_hits, key=lambda x: x[0])[-1]
+            booking_data["room"] = room.capitalize()
 
         # Absolute date: DD.MM[.YYYY] (explicit user correction always overrides stale value)
         date_match = re.search(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?\b", text)
