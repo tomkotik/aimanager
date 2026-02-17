@@ -221,7 +221,7 @@ export default function AgentDetailPage() {
       });
 
       // 2) Validate + build runtime payload (no manual code path).
-      const actionsRaw = asObject(agent.actions_config).actions;
+      const actionsRaw = asObject(agent?.actions_config).actions;
       const actions = Array.isArray(actionsRaw)
         ? actionsRaw.filter((x) => typeof x === "object" && x && !Array.isArray(x))
         : [];
