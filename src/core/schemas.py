@@ -44,11 +44,13 @@ class ChannelConfig(BaseModel):
 class AgentConfig(BaseModel):
     id: str
     name: str
+    schema_version: str = "1.1.0"
     identity: AgentIdentity
     style: AgentStyle = Field(default_factory=AgentStyle)
     rules: list[AgentRule] = Field(default_factory=list)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     channels: list[ChannelConfig] = Field(default_factory=list)
+    runtime: dict = Field(default_factory=dict)
 
 
 class IntentContract(BaseModel):

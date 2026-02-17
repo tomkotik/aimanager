@@ -5,6 +5,7 @@ from typing import Any
 
 import yaml
 
+from src.core.config_schema import migrate_agent_config
 from src.core.schemas import ActionConfig, AgentConfig, DialoguePolicyConfig, TenantFullConfig
 
 
@@ -27,7 +28,9 @@ def load_tenant_config(tenant_dir: str | Path) -> TenantFullConfig:
         raise FileNotFoundError(f"agent.yaml not found in {tenant_path}")
 
     agent_data = _load_yaml(agent_path)
-    agent_config = AgentConfig(**agent_data.get("agent", agent_data))
+    raw_agent = agent_data.get("agent", agent_data)
+    raw_agent = migrate_agent_config(raw_agent if isinstance(raw_agent, dict) else {})
+    agent_config = AgentConfig(**raw_agent)
 
     dp_path = tenant_path / "dialogue_policy.yaml"
     if dp_path.exists():

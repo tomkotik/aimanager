@@ -11,6 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config_loader import load_tenant_config
+from src.core.config_schema import (
+    CURRENT_CONFIG_SCHEMA_VERSION,
+    get_config_schema_descriptor,
+    migrate_agent_config,
+)
 from src.core.crud import create_agent, create_tenant, get_agent, get_tenant_by_slug
 from src.core.secrets import resolve_secret
 from src.db import get_db
@@ -21,6 +26,39 @@ from .schemas import AgentCreateRequest, AgentDetailResponse, AgentResponse, Age
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
+
+
+class ConfigSchemaResponse(BaseModel):
+    current_version: str
+    supported_versions: list[str]
+    migrations: list[dict]
+
+
+class ConfigMigrateRequest(BaseModel):
+    config: dict
+
+
+class ConfigMigrateResponse(BaseModel):
+    from_version: str
+    to_version: str
+    migrated: dict
+
+
+@router.get("/config/schema", response_model=ConfigSchemaResponse)
+async def get_config_schema() -> ConfigSchemaResponse:
+    descriptor = get_config_schema_descriptor()
+    return ConfigSchemaResponse(**descriptor)
+
+
+@router.post("/config/migrate", response_model=ConfigMigrateResponse)
+async def migrate_config(payload: ConfigMigrateRequest) -> ConfigMigrateResponse:
+    from_version = str(payload.config.get("schema_version", "1.0.0"))
+    migrated = migrate_agent_config(payload.config)
+    return ConfigMigrateResponse(
+        from_version=from_version,
+        to_version=str(migrated.get("schema_version", CURRENT_CONFIG_SCHEMA_VERSION)),
+        migrated=migrated,
+    )
 
 
 @router.get("", response_model=list[AgentResponse])
@@ -91,12 +129,12 @@ async def create_agent_endpoint(
                     detail=f"Invalid tenant config: tenants/{tenant_slug}",
                 ) from e
 
-        config = tenant_cfg.agent.model_dump()
+        config = migrate_agent_config(tenant_cfg.agent.model_dump())
         name = payload.name or tenant_cfg.agent.name
         dialogue_policy = tenant_cfg.dialogue_policy.model_dump()
         actions_config = {"actions": [a.model_dump() for a in tenant_cfg.actions]}
     else:
-        config = payload.config
+        config = migrate_agent_config(payload.config)
         name = payload.name or agent_slug
 
     try:
@@ -138,7 +176,7 @@ async def update_agent_endpoint(
     if payload.name is not None:
         agent.name = payload.name
     if payload.config is not None:
-        agent.config = payload.config
+        agent.config = migrate_agent_config(payload.config)
     if payload.dialogue_policy is not None:
         agent.dialogue_policy = payload.dialogue_policy
     if payload.is_active is not None:
@@ -174,7 +212,7 @@ async def sync_agent_endpoint(agent_id: UUID, db: AsyncSession = Depends(get_db)
 
     tenant_cfg = load_tenant_config(f"tenants/{tenant.slug}")
     agent.name = tenant_cfg.agent.name
-    agent.config = tenant_cfg.agent.model_dump()
+    agent.config = migrate_agent_config(tenant_cfg.agent.model_dump())
     agent.dialogue_policy = tenant_cfg.dialogue_policy.model_dump()
     agent.actions_config = {"actions": [a.model_dump() for a in tenant_cfg.actions]}
 
