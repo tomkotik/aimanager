@@ -24,7 +24,7 @@
 
 ## 4) Ops Core
 - [x] Канареечный релиз + rollback (runbook + staged deploy).
-- [ ] SLO-дашборд (availability, success-rate booking, p95 latency, incident count).
+- [ ] SLO-дашборд (availability, success-rate booking, p95 latency, incident count). *(API-слой реализован: `/api/v1/analytics/reliability`)*
 - [x] Postmortem-шаблон и weekly reliability review.
 
 ---
@@ -60,3 +60,4 @@
 - `ops/POSTMORTEM_TEMPLATE.md` — шаблон постмортема.
 - `ops/WEEKLY_RELIABILITY_REVIEW_TEMPLATE.md` — weekly reliability review.
 - `scripts/reliability_report.py` — KPI snapshot (success/false-confirm/p95/busy precision).
+- `GET /api/v1/analytics/reliability` — SLO/KPI API для дашборда.
