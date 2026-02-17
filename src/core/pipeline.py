@@ -410,7 +410,7 @@ class MessagePipeline:
         except Exception as e:
             # Graceful degradation: keep chat responsive even if LLM is unavailable/rate-limited.
             latency_ms = int((time.time() - start_time) * 1000)
-            fallback_text = self._build_llm_fallback(ctx)
+            fallback_text = await self._build_llm_fallback(ctx)
             logger.exception("LLM think failed; using deterministic fallback")
 
             ctx.ai_response = fallback_text
@@ -436,18 +436,43 @@ class MessagePipeline:
             )
             return ctx
 
-    def _build_llm_fallback(self, ctx: PipelineContext) -> str:
+    async def _build_llm_fallback(self, ctx: PipelineContext) -> str:
         """Fallback reply when LLM call fails (quota/rate-limit/network)."""
         conv_state = ctx.incoming.metadata.get("conversation_state", {}) or {}
         flow_state = conv_state.get("flow", {}) or {}
         booking_data = flow_state.get("booking_data", {}) or {}
 
         if flow_state.get("booking_event_id"):
-            return (
-                "Бронь уже зафиксирована. Передам менеджеру, он пришлёт детали и предоплату."
-            )
+            return "Бронь уже зафиксирована. Передам менеджеру, он пришлёт детали и предоплату."
 
         if flow_state.get("booking_status") in {"busy", "busy_escalated"}:
+            text_lower = (ctx.incoming.text or "").lower()
+            availability_markers = [
+                "какое время",
+                "какие свобод",
+                "что свобод",
+                "свободные",
+                "во сколько",
+                "весь день",
+                "предложите",
+                "вы предложите",
+            ]
+            if any(m in text_lower for m in availability_markers):
+                slots = await self._suggest_available_slots(flow_state)
+                if slots:
+                    date_str = str(booking_data.get("date") or "указанную дату")
+                    room = str(booking_data.get("room") or "выбранный зал")
+                    return (
+                        f"На {date_str} в зале {room} свободно: {', '.join(slots)}. "
+                        "Какой слот фиксируем?"
+                    )
+
+                if booking_data.get("date") and booking_data.get("room"):
+                    return (
+                        "Понял. Проверяю интервалы по часу в этом зале — "
+                        "если хотите, могу также предложить варианты по другим залам на эту дату."
+                    )
+
             busy_rooms = flow_state.get("last_conflicting_rooms") or []
             rooms_hint = f" Сейчас заняты: {', '.join(busy_rooms)}." if busy_rooms else ""
             return (
@@ -470,10 +495,69 @@ class MessagePipeline:
             ask = ", ".join(missing[:3])
             return f"Продолжим запись. Уточните, пожалуйста: {ask}."
 
-        return (
-            "С удовольствием помогу с записью. "
-            "Напишите дату, время, длительность, зал, имя и телефон."
-        )
+        return "С удовольствием помогу с записью. Напишите дату, время, длительность, зал, имя и телефон."
+
+    async def _suggest_available_slots(self, flow_state: dict) -> list[str]:
+        """Find free same-day slots for the selected room when requested slot is busy."""
+        try:
+            from datetime import datetime
+            from pathlib import Path
+
+            from src.integrations.google_calendar import GoogleCalendarAdapter
+
+            booking_data = (flow_state or {}).get("booking_data", {}) or {}
+            date_str = str(booking_data.get("date") or "").strip()
+            room = str(booking_data.get("room") or "").strip()
+            if not date_str or not room:
+                return []
+
+            duration_hours = int(booking_data.get("duration") or 2)
+            requested_time = str(booking_data.get("time") or "").strip()
+
+            # Secrets are currently tenant-specific for J-One in production container.
+            secrets_dir = Path("/app/secrets/j-one-studio")
+            calendar_id_file = secrets_dir / "google_calendar_id"
+            sa_path_file = secrets_dir / "google_sa_path"
+            if not calendar_id_file.exists() or not sa_path_file.exists():
+                return []
+
+            calendar_id = calendar_id_file.read_text().strip()
+            sa_path = sa_path_file.read_text().strip()
+            if not calendar_id or calendar_id == "CHANGE_ME" or not sa_path:
+                return []
+
+            adapter = GoogleCalendarAdapter({
+                "calendar_id": calendar_id,
+                "service_account_path": sa_path,
+            })
+
+            # Heuristic working window for studio slots.
+            open_hour = 9
+            close_hour = 23
+            max_start = max(open_hour, close_hour - duration_hours)
+
+            slots: list[str] = []
+            for hh in range(open_hour, max_start + 1):
+                candidate_time = f"{hh:02d}:00"
+                if requested_time and candidate_time == requested_time:
+                    continue
+
+                start = datetime.strptime(f"{date_str} {candidate_time}", "%d.%m.%Y %H:%M")
+                availability = await adapter.check_availability(
+                    {
+                        "start": start,
+                        "duration_hours": duration_hours,
+                        "room": room,
+                    }
+                )
+                if availability.get("success") and availability.get("available") is True:
+                    slots.append(candidate_time)
+                if len(slots) >= 5:
+                    break
+
+            return slots
+        except Exception:
+            return []
 
     async def _validate(self, ctx: PipelineContext) -> PipelineContext:
         """Validate response against intent contract + style limits."""
