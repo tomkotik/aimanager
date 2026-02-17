@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 # In production, this should be in Redis. For now, in-memory dict.
 _last_message_ids: dict[str, str] = {}
 
+# Keep one asyncio loop per worker process. Creating a new loop for each Celery tick
+# causes asyncpg/SQLAlchemy "attached to a different loop" and "another operation in progress".
+_worker_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_worker_loop() -> asyncio.AbstractEventLoop:
+    global _worker_loop
+    if _worker_loop is None or _worker_loop.is_closed():
+        _worker_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(_worker_loop)
+    return _worker_loop
+
 
 @celery_app.task(name="agentbox.poll_channels")
 def poll_channels_task():
@@ -35,7 +47,8 @@ def poll_channels_task():
 
     Scheduled via celery beat (every 3-5 seconds).
     """
-    asyncio.run(_poll_channels())
+    loop = _get_worker_loop()
+    loop.run_until_complete(_poll_channels())
 
 
 async def _poll_channels():
@@ -82,7 +95,14 @@ async def _poll_channels():
 
             for ch_config in poll_channels:
                 try:
-                    umnico_token = resolve_secret(tenant.slug, "umnico_token")
+                    umnico_token = (
+                        resolve_secret(tenant.slug, "umnico_api_token")
+                        or resolve_secret(tenant.slug, "umnico_token")
+                    )
+                    if not umnico_token:
+                        logger.warning("Umnico token missing for tenant=%s; skip polling", tenant.slug)
+                        continue
+
                     ch_config_resolved = {**ch_config.get("config", {}), "token": umnico_token}
                     adapter = get_channel_adapter(ch_config["type"], ch_config_resolved)
                     messages = await adapter.receive()
