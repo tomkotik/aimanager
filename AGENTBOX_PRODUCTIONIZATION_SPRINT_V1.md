@@ -9,12 +9,12 @@
 
 ## 1) Reliability Core (критично)
 - [ ] Единый state-contract для всех transactional сценариев.
-- [ ] Жёсткий deterministic post-processor (truth from backend only).
-- [ ] Idempotency + dedupe + anti-reorder как стандартный middleware.
+- [x] Жёсткий deterministic post-processor (truth from backend only).
+- [x] Idempotency + dedupe + anti-reorder как стандартный middleware.
 
 ## 2) Eval & QA Core
-- [ ] Авто-регрессия (free/busy/switch/duplicate/incomplete/escalation).
-- [ ] Проверка outcome-полей: `booking_event_id`, `booking_status`, `automation_trace`.
+- [x] Авто-регрессия (free/busy/switch/duplicate/incomplete/escalation).
+- [x] Проверка outcome-полей: `booking_event_id`, `booking_status`, `automation_trace`.
 - [ ] Запрет релиза при падении хотя бы 1 критического кейса.
 
 ## 3) Platform / Builder Core
@@ -48,3 +48,7 @@
 
 ## Примечание к исполнению
 Этот sprint-план должен реализовываться инкрементально с обязательным regression-gate перед каждым rollout.
+
+## Артефакты выполнения (v1)
+- `scripts/regression_matrix.py` — автопрогон критичных transactional-сценариев.
+- `RELEASE_GATE.md` — правила блокировки релиза при падении критики.
