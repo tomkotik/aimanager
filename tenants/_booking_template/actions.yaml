@@ -1,0 +1,12 @@
+actions:
+  - id: "create_booking"
+    type: "tool"
+    trigger: "CREATE_BOOKING"
+    config:
+      provider: "google_calendar"
+
+  - id: "escalate_manager"
+    type: "tool"
+    trigger: "ESCALATE"
+    config:
+      provider: "telegram_notify"

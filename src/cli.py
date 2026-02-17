@@ -2,7 +2,8 @@
 AgentBox CLI — command-line interface for managing agents.
 
 Usage:
-    agentbox init <tenant-slug>          — create tenant from template
+    agentbox init <tenant-slug>          — create tenant from generic template
+    agentbox init-booking <tenant-slug>  — create tenant from booking template (1-click)
     agentbox agent start <tenant-slug>   — start agent (register in DB + start polling)
     agentbox agent stop <tenant-slug>    — stop agent (deactivate)
     agentbox agent status                — show all agents and their status
@@ -32,16 +33,16 @@ def cli(verbose: bool):
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
 
 
-@cli.command()
-@click.argument("tenant_slug")
-@click.option("--name", "-n", default=None, help="Display name for the tenant")
-def init(tenant_slug: str, name: str | None):
-    """Create a new tenant from template."""
-    template_dir = Path("tenants/_template")
+def _scaffold_tenant(tenant_slug: str, name: str | None, template_subdir: str) -> None:
+    template_dir = Path(template_subdir)
     target_dir = Path(f"tenants/{tenant_slug}")
 
     if target_dir.exists():
         click.echo(f"Error: tenants/{tenant_slug} already exists", err=True)
+        raise SystemExit(1)
+
+    if not template_dir.exists():
+        click.echo(f"Error: template not found: {template_dir}", err=True)
         raise SystemExit(1)
 
     shutil.copytree(template_dir, target_dir)
@@ -66,6 +67,22 @@ def init(tenant_slug: str, name: str | None):
     click.echo(f"  2. Add knowledge files to tenants/{tenant_slug}/knowledge/")
     click.echo(f"  3. Set secrets: agentbox secrets set {tenant_slug} openai_key sk-...")
     click.echo(f"  4. Start: agentbox agent start {tenant_slug}")
+
+
+@cli.command()
+@click.argument("tenant_slug")
+@click.option("--name", "-n", default=None, help="Display name for the tenant")
+def init(tenant_slug: str, name: str | None):
+    """Create a new tenant from generic template."""
+    _scaffold_tenant(tenant_slug, name, "tenants/_template")
+
+
+@cli.command(name="init-booking")
+@click.argument("tenant_slug")
+@click.option("--name", "-n", default=None, help="Display name for the tenant")
+def init_booking(tenant_slug: str, name: str | None):
+    """Create a new booking-first tenant from booking template (1-click)."""
+    _scaffold_tenant(tenant_slug, name, "tenants/_booking_template")
 
 
 @cli.group()

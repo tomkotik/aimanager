@@ -18,9 +18,9 @@
 - [x] Запрет релиза при падении хотя бы 1 критического кейса.
 
 ## 3) Platform / Builder Core
-- [ ] Шаблон «агент под бронирование» в 1 клик.
-- [ ] UI-конфиг → валидатор → генерация runtime-конфига без ручного кода.
-- [ ] Версионирование схемы + миграции.
+- [x] Шаблон «агент под бронирование» в 1 клик.
+- [ ] UI-конфиг → валидатор → генерация runtime-конфига без ручного кода. *(CLI-часть сделана: build_runtime_config.py)*
+- [ ] Версионирование схемы + миграции. *(база заложена: schema_version в runtime_config.py)*
 
 ## 4) Ops Core
 - [x] Канареечный релиз + rollback (runbook + staged deploy).
@@ -54,6 +54,8 @@
 - `scripts/release_gate.sh` — gate-обёртка: release block при падении критичных кейсов.
 - `RELEASE_GATE.md` — правила блокировки релиза при падении критики.
 - `src/core/state_contract.py` — нормализация/валидация transactional flow-state.
+- `tenants/_booking_template/*` + `agentbox init-booking` — 1-click booking template.
+- `src/core/runtime_config.py` + `scripts/build_runtime_config.py` — versioned runtime config builder.
 - `ops/CANARY_ROLLBACK_RUNBOOK.md` — canary/rollback runbook.
 - `ops/POSTMORTEM_TEMPLATE.md` — шаблон постмортема.
 - `ops/WEEKLY_RELIABILITY_REVIEW_TEMPLATE.md` — weekly reliability review.

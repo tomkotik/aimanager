@@ -1,0 +1,26 @@
+dialogue_policy:
+  intents:
+    - id: "BOOKING"
+      markers: ["забронировать", "бронь", "записаться", "время", "зал"]
+      priority: 90
+    - id: "ESCALATE"
+      markers: ["менеджер", "человек", "оператор", "свяжите"]
+      priority: 95
+    - id: "SAFE_FAQ"
+      markers: ["цена", "стоимость", "адрес", "залы", "что входит"]
+      priority: 60
+
+  conversation_flow:
+    stages:
+      - id: "qualify"
+        goal: "Собрать первичные требования"
+        required_fields: []
+      - id: "offer"
+        goal: "Предложить варианты"
+        required_fields: ["room"]
+      - id: "close"
+        goal: "Закрыть на подтверждение"
+        required_fields: ["date", "time", "duration", "room"]
+      - id: "finalize"
+        goal: "Финализировать бронь"
+        required_fields: ["date", "time", "duration", "room", "phone"]
