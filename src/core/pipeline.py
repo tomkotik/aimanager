@@ -366,48 +366,114 @@ class MessagePipeline:
 
         # Track latency
         start_time = time.time()
-        response = await self.brain.think(system_prompt, messages)
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        # Track which knowledge documents were used
         documents_used = list(ctx.knowledge.keys()) if ctx.knowledge else []
 
-        # Parse action tags from AI response.
-        from src.core.action_parser import parse_action_tags
+        try:
+            response = await self.brain.think(system_prompt, messages)
+            latency_ms = int((time.time() - start_time) * 1000)
 
-        parsed = parse_action_tags(response.content)
+            # Parse action tags from AI response.
+            from src.core.action_parser import parse_action_tags
 
-        ctx.ai_response = parsed.clean_text
-        ctx.raw_response = response.content  # Save raw response before postprocessing
-        ctx.actions_to_run = parsed.actions
-        ctx.booking_data = parsed.booking_data
-        
-        # Store debug information
-        ctx.debug = {
-            "prompt_sent": system_prompt,
-            "documents_used": documents_used,
-            "latency_ms": latency_ms,
-            "raw_response": response.content,
-        }
-        
-        ctx.outgoing = OutgoingMessage(
-            text=parsed.clean_text,
-            conversation_id=ctx.incoming.metadata.get("conversation_id", ""),
-            channel_conversation_id=ctx.incoming.channel_conversation_id,
-            metadata={
-                "intent": ctx.detected_intent,
-                "intent_confidence": ctx.intent_confidence,
-                "model": response.model,
-                "usage": response.usage,
-                "latency_ms": latency_ms,
-                "documents_used": documents_used,
+            parsed = parse_action_tags(response.content)
+
+            ctx.ai_response = parsed.clean_text
+            ctx.raw_response = response.content  # Save raw response before postprocessing
+            ctx.actions_to_run = parsed.actions
+            ctx.booking_data = parsed.booking_data
+
+            # Store debug information
+            ctx.debug = {
                 "prompt_sent": system_prompt,
+                "documents_used": documents_used,
+                "latency_ms": latency_ms,
                 "raw_response": response.content,
-                "config_version": ctx.incoming.metadata.get("config_version", ""),
-            },
-        )
+            }
 
-        return ctx
+            ctx.outgoing = OutgoingMessage(
+                text=parsed.clean_text,
+                conversation_id=ctx.incoming.metadata.get("conversation_id", ""),
+                channel_conversation_id=ctx.incoming.channel_conversation_id,
+                metadata={
+                    "intent": ctx.detected_intent,
+                    "intent_confidence": ctx.intent_confidence,
+                    "model": response.model,
+                    "usage": response.usage,
+                    "latency_ms": latency_ms,
+                    "documents_used": documents_used,
+                    "prompt_sent": system_prompt,
+                    "raw_response": response.content,
+                    "config_version": ctx.incoming.metadata.get("config_version", ""),
+                },
+            )
+            return ctx
+        except Exception as e:
+            # Graceful degradation: keep chat responsive even if LLM is unavailable/rate-limited.
+            latency_ms = int((time.time() - start_time) * 1000)
+            fallback_text = self._build_llm_fallback(ctx)
+            logger.exception("LLM think failed; using deterministic fallback")
+
+            ctx.ai_response = fallback_text
+            ctx.raw_response = fallback_text
+            ctx.actions_to_run = []
+            ctx.booking_data = None
+            ctx.outgoing = OutgoingMessage(
+                text=fallback_text,
+                conversation_id=ctx.incoming.metadata.get("conversation_id", ""),
+                channel_conversation_id=ctx.incoming.channel_conversation_id,
+                metadata={
+                    "intent": ctx.detected_intent,
+                    "intent_confidence": ctx.intent_confidence,
+                    "model": "fallback_rule_engine",
+                    "usage": {},
+                    "latency_ms": latency_ms,
+                    "documents_used": documents_used,
+                    "prompt_sent": system_prompt,
+                    "raw_response": fallback_text,
+                    "llm_error": str(e),
+                    "config_version": ctx.incoming.metadata.get("config_version", ""),
+                },
+            )
+            return ctx
+
+    def _build_llm_fallback(self, ctx: PipelineContext) -> str:
+        """Fallback reply when LLM call fails (quota/rate-limit/network)."""
+        conv_state = ctx.incoming.metadata.get("conversation_state", {}) or {}
+        flow_state = conv_state.get("flow", {}) or {}
+        booking_data = flow_state.get("booking_data", {}) or {}
+
+        if flow_state.get("booking_event_id"):
+            return (
+                "Бронь уже зафиксирована. Передам менеджеру, он пришлёт детали и предоплату."
+            )
+
+        if flow_state.get("booking_status") in {"busy", "busy_escalated"}:
+            busy_rooms = flow_state.get("last_conflicting_rooms") or []
+            rooms_hint = f" Сейчас заняты: {', '.join(busy_rooms)}." if busy_rooms else ""
+            return (
+                "К сожалению, выбранный слот занят. "
+                "Предложите другой зал или другое время, и я сразу проверю доступность."
+                f"{rooms_hint}"
+            ).strip()
+
+        required_labels = {
+            "date": "дата",
+            "time": "время",
+            "duration": "длительность (в часах)",
+            "room": "зал",
+            "name": "имя",
+            "phone": "телефон",
+        }
+        missing = [label for key, label in required_labels.items() if not booking_data.get(key)]
+
+        if missing and len(missing) < len(required_labels):
+            ask = ", ".join(missing[:3])
+            return f"Продолжим запись. Уточните, пожалуйста: {ask}."
+
+        return (
+            "С удовольствием помогу с записью. "
+            "Напишите дату, время, длительность, зал, имя и телефон."
+        )
 
     async def _validate(self, ctx: PipelineContext) -> PipelineContext:
         """Validate response against intent contract + style limits."""
