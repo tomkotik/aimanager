@@ -19,7 +19,7 @@
 
 ## 3) Platform / Builder Core
 - [x] Шаблон «агент под бронирование» в 1 клик.
-- [ ] UI-конфиг → валидатор → генерация runtime-конфига без ручного кода. *(CLI/Backend-часть сделана: build_runtime_config.py + /config/migrate)*
+- [ ] UI-конфиг → валидатор → генерация runtime-конфига без ручного кода. *(Backend-часть сделана: /config/migrate + /config/validate-runtime + build_runtime_config.py; осталось UI wiring)*
 - [x] Версионирование схемы + миграции. *(config_schema.py + /api/v1/agents/config/schema|migrate)*
 
 ## 4) Ops Core
@@ -56,7 +56,7 @@
 - `src/core/state_contract.py` — нормализация/валидация transactional flow-state.
 - `tenants/_booking_template/*` + `agentbox init-booking` — 1-click booking template.
 - `src/core/runtime_config.py` + `scripts/build_runtime_config.py` — versioned runtime config builder.
-- `src/core/config_schema.py` + `/api/v1/agents/config/schema|migrate` — versioned config schema + migrations API.
+- `src/core/config_schema.py` + `/api/v1/agents/config/schema|migrate|validate-runtime` — versioned config schema + migration/validation API.
 - `ops/CANARY_ROLLBACK_RUNBOOK.md` — canary/rollback runbook.
 - `ops/POSTMORTEM_TEMPLATE.md` — шаблон постмортема.
 - `ops/WEEKLY_RELIABILITY_REVIEW_TEMPLATE.md` — weekly reliability review.

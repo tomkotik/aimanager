@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,8 @@ from src.core.config_schema import (
     migrate_agent_config,
 )
 from src.core.crud import create_agent, create_tenant, get_agent, get_tenant_by_slug
+from src.core.runtime_config import build_runtime_config
+from src.core.schemas import ActionConfig, AgentConfig, DialoguePolicyConfig, TenantFullConfig
 from src.core.secrets import resolve_secret
 from src.db import get_db
 from src.models import Agent, Conversation, Tenant
@@ -44,6 +46,21 @@ class ConfigMigrateResponse(BaseModel):
     migrated: dict
 
 
+class ConfigValidateRuntimeRequest(BaseModel):
+    config: dict
+    dialogue_policy: dict | None = None
+    actions: list[dict] | None = None
+    knowledge: dict[str, str] | None = None
+    tenant_slug: str | None = None
+
+
+class ConfigValidateRuntimeResponse(BaseModel):
+    valid: bool
+    schema_version: str
+    runtime_config: dict | None = None
+    errors: list[str] = Field(default_factory=list)
+
+
 @router.get("/config/schema", response_model=ConfigSchemaResponse)
 async def get_config_schema() -> ConfigSchemaResponse:
     descriptor = get_config_schema_descriptor()
@@ -59,6 +76,44 @@ async def migrate_config(payload: ConfigMigrateRequest) -> ConfigMigrateResponse
         to_version=str(migrated.get("schema_version", CURRENT_CONFIG_SCHEMA_VERSION)),
         migrated=migrated,
     )
+
+
+@router.post("/config/validate-runtime", response_model=ConfigValidateRuntimeResponse)
+async def validate_runtime_config(payload: ConfigValidateRuntimeRequest) -> ConfigValidateRuntimeResponse:
+    """Validate UI-provided config and build versioned runtime payload.
+
+    This endpoint is intended for UI/Builder flows to avoid manual code edits.
+    """
+    try:
+        migrated = migrate_agent_config(payload.config)
+        agent_cfg = AgentConfig.model_validate(migrated)
+        dialogue_cfg = DialoguePolicyConfig.model_validate(payload.dialogue_policy or {})
+        actions_cfg = [ActionConfig.model_validate(a) for a in (payload.actions or [])]
+        full_cfg = TenantFullConfig(
+            agent=agent_cfg,
+            dialogue_policy=dialogue_cfg,
+            actions=actions_cfg,
+            knowledge=payload.knowledge or {},
+        )
+        runtime_payload = build_runtime_config(full_cfg, tenant_slug=payload.tenant_slug or "preview")
+        return ConfigValidateRuntimeResponse(
+            valid=True,
+            schema_version=str(migrated.get("schema_version", CURRENT_CONFIG_SCHEMA_VERSION)),
+            runtime_config=runtime_payload,
+            errors=[],
+        )
+    except ValidationError as e:
+        errs = []
+        for item in e.errors():
+            loc = ".".join(str(x) for x in item.get("loc", []))
+            msg = item.get("msg", "validation error")
+            errs.append(f"{loc}: {msg}" if loc else msg)
+        return ConfigValidateRuntimeResponse(
+            valid=False,
+            schema_version=str(payload.config.get("schema_version", "1.0.0")),
+            runtime_config=None,
+            errors=errs,
+        )
 
 
 @router.get("", response_model=list[AgentResponse])
@@ -129,12 +184,26 @@ async def create_agent_endpoint(
                     detail=f"Invalid tenant config: tenants/{tenant_slug}",
                 ) from e
 
-        config = migrate_agent_config(tenant_cfg.agent.model_dump())
+        migrated = migrate_agent_config(tenant_cfg.agent.model_dump())
+        try:
+            config = AgentConfig.model_validate(migrated).model_dump()
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid migrated config from tenant YAML: {e}",
+            ) from e
         name = payload.name or tenant_cfg.agent.name
         dialogue_policy = tenant_cfg.dialogue_policy.model_dump()
         actions_config = {"actions": [a.model_dump() for a in tenant_cfg.actions]}
     else:
-        config = migrate_agent_config(payload.config)
+        migrated = migrate_agent_config(payload.config)
+        try:
+            config = AgentConfig.model_validate(migrated).model_dump()
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid config payload: {e}",
+            ) from e
         name = payload.name or agent_slug
 
     try:
@@ -176,7 +245,14 @@ async def update_agent_endpoint(
     if payload.name is not None:
         agent.name = payload.name
     if payload.config is not None:
-        agent.config = migrate_agent_config(payload.config)
+        migrated = migrate_agent_config(payload.config)
+        try:
+            agent.config = AgentConfig.model_validate(migrated).model_dump()
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid config payload: {e}",
+            ) from e
     if payload.dialogue_policy is not None:
         agent.dialogue_policy = payload.dialogue_policy
     if payload.is_active is not None:
@@ -212,7 +288,14 @@ async def sync_agent_endpoint(agent_id: UUID, db: AsyncSession = Depends(get_db)
 
     tenant_cfg = load_tenant_config(f"tenants/{tenant.slug}")
     agent.name = tenant_cfg.agent.name
-    agent.config = migrate_agent_config(tenant_cfg.agent.model_dump())
+    migrated = migrate_agent_config(tenant_cfg.agent.model_dump())
+    try:
+        agent.config = AgentConfig.model_validate(migrated).model_dump()
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid migrated config from tenant YAML: {e}",
+        ) from e
     agent.dialogue_policy = tenant_cfg.dialogue_policy.model_dump()
     agent.actions_config = {"actions": [a.model_dump() for a in tenant_cfg.actions]}
 
