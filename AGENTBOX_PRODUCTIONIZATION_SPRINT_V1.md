@@ -8,14 +8,14 @@
 ---
 
 ## 1) Reliability Core (критично)
-- [ ] Единый state-contract для всех transactional сценариев.
+- [x] Единый state-contract для всех transactional сценариев.
 - [x] Жёсткий deterministic post-processor (truth from backend only).
 - [x] Idempotency + dedupe + anti-reorder как стандартный middleware.
 
 ## 2) Eval & QA Core
 - [x] Авто-регрессия (free/busy/switch/duplicate/incomplete/escalation).
 - [x] Проверка outcome-полей: `booking_event_id`, `booking_status`, `automation_trace`.
-- [ ] Запрет релиза при падении хотя бы 1 критического кейса.
+- [x] Запрет релиза при падении хотя бы 1 критического кейса.
 
 ## 3) Platform / Builder Core
 - [ ] Шаблон «агент под бронирование» в 1 клик.
@@ -51,4 +51,6 @@
 
 ## Артефакты выполнения (v1)
 - `scripts/regression_matrix.py` — автопрогон критичных transactional-сценариев.
+- `scripts/release_gate.sh` — gate-обёртка: release block при падении критичных кейсов.
 - `RELEASE_GATE.md` — правила блокировки релиза при падении критики.
+- `src/core/state_contract.py` — нормализация/валидация transactional flow-state.
