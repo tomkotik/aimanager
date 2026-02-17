@@ -154,9 +154,22 @@ class MessagePipeline:
 
         # Load conversation state (for intent lock, pending bookings, etc.).
         state = conv.state or {}
+
+        # If previous booking was finalized and user starts a new booking cycle,
+        # reset flow so stale booking_event_id/automation flags don't block new bookings.
+        if self._should_reset_finalized_flow(state, ctx.incoming.text or ""):
+            state["flow"] = {
+                "stage": "qualify",
+                "booking_data": {},
+            }
+            state.pop("locked_intent", None)
+            state.pop("intent_lock_turns_left", None)
+            conv.state = state
+            logger.info("Reset finalized flow for new booking cycle: conversation=%s", conv.id)
+
         ctx.incoming.metadata["conversation_state"] = state
         ctx.incoming.metadata["conversation_id"] = str(conv.id)
-        
+
         # Initialize conversation flow tracking if not present
         if "flow" not in state:
             state["flow"] = {
@@ -171,6 +184,31 @@ class MessagePipeline:
             conv.lead_phone = ctx.incoming.sender_phone
 
         return ctx
+
+    @staticmethod
+    def _should_reset_finalized_flow(state: dict, text: str) -> bool:
+        """Detect explicit start of a new booking after previous finalize."""
+        try:
+            flow = (state or {}).get("flow") or {}
+            finalized = bool(flow.get("booking_finalized")) or str(flow.get("stage", "")).lower() == "finalize"
+            if not finalized:
+                return False
+
+            low = (text or "").lower()
+            restart_markers = [
+                "хочу записаться",
+                "хочу брон",
+                "заброниров",
+                "новая брон",
+                "еще брон",
+                "другой слот",
+                "другая дата",
+                "привет",
+                "здравствуйте",
+            ]
+            return any(m in low for m in restart_markers)
+        except Exception:
+            return False
 
     async def _detect_intent(self, ctx: PipelineContext) -> PipelineContext:
         """Detect intent using IntentRouter + IntentLock."""
